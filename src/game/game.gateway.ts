@@ -24,16 +24,28 @@ export class GameGateway implements OnGatewayDisconnect {
     if (room) this.server.to(roomCode).emit('roomStateUpdated', { roomCode, ...room });
   }
 
+  // 💡 [교체] 기존의 handleDisconnect 함수 전체 덮어쓰기
   handleDisconnect(client: Socket) {
     for (const roomCode in this.matchingRooms) {
       const room = this.matchingRooms[roomCode];
       
+      // 해당 방에서 게임이 한창 진행 중인지 확인합니다.
+      const gameRoom = this.gameService.getRoom(roomCode);
+      const isGameActive = gameRoom && !gameRoom.isGameOver;
+
       if (room.creator.id === client.id) {
-        this.server.to(roomCode).emit('roomDestroyed');
+        // 방장이 나갔을 때: 게임 중이면 탈주 알림, 대기실이면 방 폭파 알림
+        if (isGameActive) this.server.to(roomCode).emit('opponentDisconnected');
+        else this.server.to(roomCode).emit('roomDestroyed');
         delete this.matchingRooms[roomCode];
       } else {
         const guestIndex = room.guests.findIndex((g: any) => g.id === client.id);
         if (guestIndex !== -1) {
+          // 💡 게임 중인 대결 상대(게스트)가 도망갔을 때 탈주 알림을 보냅니다!
+          if (isGameActive && room.selectedGuestId === client.id) {
+            this.server.to(roomCode).emit('opponentDisconnected');
+          }
+          
           room.guests.splice(guestIndex, 1);
           if (room.selectedGuestId === client.id) {
             room.selectedGuestId = room.guests.length > 0 ? room.guests[0].id : null;

@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>스도쿠 듀얼 (Sudoku Dual) - 온라인 보드게임</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,7 +12,8 @@
         body { background-color: #e0e0e0; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; user-select: none; }
         * { font-family: 'Nanum Pen Script', cursive; }
 
-        .panel-screen { width: 520px; background: #fcf8eb; padding: 40px; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); border: 4px solid #222; text-align: center; margin-top: 50px; }
+        /* 💡 [교체] 로비 화면 모바일 반응형 처리 */
+        .panel-screen { width: 100%; max-width: 520px; box-sizing: border-box; background: #fcf8eb; padding: 30px 20px; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); border: 4px solid #222; text-align: center; margin-top: 50px; }
         .title-text { font-size: 60px; margin-bottom: 20px; color: #111; text-shadow: 2px 2px 4px rgba(0,0,0,0.2); }
         .input-box { width: 100%; padding: 10px; font-size: 26px; text-align: center; margin-bottom: 20px; border: 2px solid #333; border-radius: 6px; box-sizing: border-box; }
         .btn-main { width: 100%; padding: 15px; font-size: 32px; background-color: #2e7d32; color: white; border: 3px solid #1b5e20; border-radius: 8px; cursor: pointer; margin-bottom: 15px; transition: transform 0.1s; }
@@ -29,7 +30,7 @@
         .btn-small { padding: 5px 10px; font-size: 20px; border: none; border-radius: 4px; cursor: pointer; margin-left: 5px; }
 
         /* 인게임 스타일 */
-        .container { width: 540px; background: white; padding: 20px 30px; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); position: relative; }
+        .container { width: 100%; max-width: 540px; box-sizing: border-box; background: white; padding: 20px 15px; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); position: relative; }
         .header { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 26px; color: #333; }
         .hint-bar { background-color: #e3f2fd; color: #0d47a1; padding: 10px; border-radius: 5px; margin-bottom: 15px; font-size: 22px; text-align: center; min-height: 25px; border: 1px dashed #0d47a1; }
         .timer-container { width: 100%; height: 12px; background-color: #d7ccc8; border-radius: 6px; margin-bottom: 25px; overflow: hidden; border: 1px solid #8d6e63; }
