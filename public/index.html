@@ -576,6 +576,18 @@
             startTimer();
         }
     });
+
+    // 💡 [신규 추가] 서버로부터 상대방 탈주 신호를 받았을 때 실행되는 리스너
+    socket.on('opponentDisconnected', () => {
+        // 게임이 시작되었고 아직 안 끝났다면 기권승 처리
+        if (isGameStarted && !isGameOver) {
+            endGame(myPlayerNumber, false, true);
+        } else if (!isGameStarted) {
+            // 게임 시작 전 대기실 상태라면 새로고침으로 로비 이동
+            alert('상대방이 대기실에서 퇴장했습니다.');
+            location.reload();
+        }
+    });
     
     function getBoxFromRowCol(r, c) { return Math.floor(r / 3) * 3 + Math.floor(c / 3) + 1; }
     
@@ -649,24 +661,29 @@
         endGame(data.winnerRole, false, true);
     });
 
+    // 💡 [교체] 기권/탈주(isSurrendered)인 경우를 처리할 수 있도록 함수를 확장합니다.
     function endGame(gameWinner, isSuffocated, isSurrendered) {
         isGameOver = true;
         clearInterval(timerInterval);
-
+        
         sndBgm.pause();
         sndBgm.currentTime = 0;
         playSound(sndGameOver);
 
         updateUI();
-        
+
         const announce = document.getElementById('winnerAnounce');
-        const wName = playerNames[gameWinner];
         
-        if (isSurrendered) announce.innerHTML = `🏳️ 상대방의 기권!<br>🎉 승리: ${wName}`;
-        else if (isSuffocated) announce.innerHTML = `💀 질식 상태 패배!<br>🎉 승리: ${wName}`;
-        else announce.innerHTML = `🎉 최종 승리자: ${wName}`;
-        
-        document.getElementById('gameOverScreen').style.display = 'flex';
+        // 💡 [핵심 추가] 상대방이 도망가서 기권승한 경우의 전용 문구를 띄워줍니다.
+        if (isSurrendered) {
+            announce.innerHTML = `🏃 상대방이 접속을 종료했습니다!<br>🎉 부전승 획득: ${playerNames[myPlayerNumber]}`;
+        } else if (isSuffocated) {
+            announce.innerHTML = `💀 더 이상 둘 곳이 없습니다 (질식)!<br>🎉 승리: ${playerNames[gameWinner]}`;
+        } else {
+            announce.innerHTML = `🎉 승리: ${playerNames[gameWinner]} !`;
+        }
+
+        document.getElementById('gameOverScreen').style.display = 'block';
     }
 
     function backToWaitingRoom() {
