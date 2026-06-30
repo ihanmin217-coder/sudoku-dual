@@ -193,6 +193,8 @@
         <div>
             <button class="btn-action" style="background: #0288d1; color: white;" onclick="startReviewMode()">🔎 복기하기</button>
             <button class="btn-action" style="background: #2e7d32; color: white;" onclick="backToWaitingRoom()">대기실로 돌아가기</button>
+            
+            <button class="btn-action" style="background: #f39c12; color: white;" onclick="backToMainLobby()">메인 로비로</button>
         </div>
     </div>
 </div>
@@ -686,9 +688,17 @@
         document.getElementById('gameOverScreen').style.display = 'block';
     }
 
+    // 💡 [버그 방지] 대기실로 돌아갈 때 게임 진행 상태를 초기화해야 다음 버그가 안 생깁니다.
     function backToWaitingRoom() {
         document.getElementById('gameContainer').style.display = 'none';
         document.getElementById('waitingRoomScreen').style.display = 'block';
+        isGameStarted = false; // 필수 초기화
+        isGameOver = false;    // 필수 초기화
+    }
+
+    // 💡 [기능 1] 메인 로비로 돌아가기 (새로고침을 통해 깔끔하게 방에서 빠져나갑니다)
+    function backToMainLobby() {
+        location.reload();
     }
 
     function startReviewMode() {
@@ -767,18 +777,15 @@
     }
 
     function surrender() { socket.emit('playerSurrender', currentRoomCode); }
+    // 💡 [기능 2, 3 적용] 대기실에서 나갔을 때 강제로 새로고침 되지 않도록 정리
     socket.on('opponentDisconnected', () => {
         if (isGameStarted && !isGameOver) {
-            // 1. 정상적인 게임 종료(기권승) 함수를 호출하여 브라우저 차단을 피합니다.
             endGame(myPlayerNumber, false, true);
-            
-            // 2. 화면의 승리 문구를 탈주 전용 문구로 살짝 덮어씌워 줍니다.
             const announce = document.getElementById('winnerAnounce');
-            announce.innerHTML = `🏃 상대방이 비겁하게 도망갔습니다!<br>🎉 부전승 획득: ${playerNames[myPlayerNumber]}`;
+            announce.innerHTML = `🏃 상대방이 접속을 종료했습니다!<br>🎉 부전승 획득: ${playerNames[myPlayerNumber]}`;
         } else if (!isGameStarted) {
-            // 대기실에서 나간 경우 (이때는 화면 터치 후라 alert이 작동합니다)
-            alert('상대방이 대기실을 나갔습니다.');
-            location.reload();
+            // 이제 대기실에서 나갔을 때는 서버가 알아서 화면 갱신 데이터(roomStateUpdated)를 
+            // 보내주므로 강제 새로고침 코드를 삭제했습니다. 방장 승계가 자연스럽게 이어집니다!
         }
     });
 

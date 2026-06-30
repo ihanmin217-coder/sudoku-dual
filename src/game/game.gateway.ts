@@ -24,31 +24,53 @@ export class GameGateway implements OnGatewayDisconnect {
     if (room) this.server.to(roomCode).emit('roomStateUpdated', { roomCode, ...room });
   }
 
-  // 💡 [교체] 기존의 handleDisconnect 함수 전체 덮어쓰기
+  // 💡 [교체] 방장 및 참가자 탈주 시 승계 및 자동 매칭을 지원하도록 업그레이드된 함수
   handleDisconnect(client: Socket) {
     for (const roomCode in this.matchingRooms) {
       const room = this.matchingRooms[roomCode];
       
-      // 해당 방에서 게임이 한창 진행 중인지 확인합니다.
       const gameRoom = this.gameService.getRoom(roomCode);
       const isGameActive = gameRoom && !gameRoom.isGameOver;
 
       if (room.creator.id === client.id) {
-        // 방장이 나갔을 때: 게임 중이면 탈주 알림, 대기실이면 방 폭파 알림
-        if (isGameActive) this.server.to(roomCode).emit('opponentDisconnected');
-        else this.server.to(roomCode).emit('roomDestroyed');
-        delete this.matchingRooms[roomCode];
-      } else {
-        const guestIndex = room.guests.findIndex((g: any) => g.id === client.id);
-        if (guestIndex !== -1) {
-          // 💡 게임 중인 대결 상대(게스트)가 도망갔을 때 탈주 알림을 보냅니다!
-          if (isGameActive && room.selectedGuestId === client.id) {
+        // 💡 [기능 2] 방장(1P)이 나갔을 때
+        if (room.guests.length > 0) {
+          // 남은 게스트 중 첫 번째 사람(2P)을 새로운 방장으로 승격
+          const newHost = room.guests.shift();
+          room.creator = newHost;
+          
+          // 그 다음 대기자(3P)를 대결 상대로 자동 지정
+          room.selectedGuestId = room.guests.length > 0 ? room.guests[0].id : null;
+
+          // 새로운 방장에게 권한 위임 알림
+          this.server.to(newHost.id).emit('hostTransferred');
+
+          if (isGameActive) {
+            gameRoom.isGameOver = true;
             this.server.to(roomCode).emit('opponentDisconnected');
           }
-          
+          this.broadcastRoomState(roomCode);
+        } else {
+          // 방에 아무도 남지 않게 되면 방 폭파
+          if (isGameActive) this.server.to(roomCode).emit('opponentDisconnected');
+          else this.server.to(roomCode).emit('roomDestroyed');
+          delete this.matchingRooms[roomCode];
+        }
+      } else {
+        // 💡 [기능 3] 게스트(2P, 3P 등)가 나갔을 때
+        const guestIndex = room.guests.findIndex((g: any) => g.id === client.id);
+        if (guestIndex !== -1) {
+          const isOpponent = room.selectedGuestId === client.id;
           room.guests.splice(guestIndex, 1);
-          if (room.selectedGuestId === client.id) {
+          
+          if (isOpponent) {
+            // 대결 상대(2P)가 나갔으면, 남아있는 첫 번째 관전자(3P)를 대결 상대로 자동 지정
             room.selectedGuestId = room.guests.length > 0 ? room.guests[0].id : null;
+
+            if (isGameActive) {
+              gameRoom.isGameOver = true;
+              this.server.to(roomCode).emit('opponentDisconnected');
+            }
           }
           this.broadcastRoomState(roomCode);
         }
