@@ -751,7 +751,18 @@
 
     function surrender() { socket.emit('playerSurrender', currentRoomCode); }
     socket.on('opponentDisconnected', () => {
-        if(!isGameOver) { alert('플레이어가 게임에서 나갔습니다.'); location.reload(); }
+        if (isGameStarted && !isGameOver) {
+            // 1. 정상적인 게임 종료(기권승) 함수를 호출하여 브라우저 차단을 피합니다.
+            endGame(myPlayerNumber, false, true);
+            
+            // 2. 화면의 승리 문구를 탈주 전용 문구로 살짝 덮어씌워 줍니다.
+            const announce = document.getElementById('winnerAnounce');
+            announce.innerHTML = `🏃 상대방이 비겁하게 도망갔습니다!<br>🎉 부전승 획득: ${playerNames[myPlayerNumber]}`;
+        } else if (!isGameStarted) {
+            // 대기실에서 나간 경우 (이때는 화면 터치 후라 alert이 작동합니다)
+            alert('상대방이 대기실을 나갔습니다.');
+            location.reload();
+        }
     });
 
     function updateUI() {
