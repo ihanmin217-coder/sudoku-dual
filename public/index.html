@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>스도쿠 듀얼 (Sudoku Dual) - 온라인 보드게임</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nanum+Pen+Script&display=swap" rel="stylesheet">
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body { background-color: #e0e0e0; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; user-select: none; }
+        * { font-family: 'Nanum Pen Script', cursive; }
+
+        .panel-screen { width: 520px; background: #fcf8eb; padding: 40px; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); border: 4px solid #222; text-align: center; margin-top: 50px; }
+        .title-text { font-size: 60px; margin-bottom: 20px; color: #111; text-shadow: 2px 2px 4px rgba(0,0,0,0.2); }
+        .input-box { width: 100%; padding: 10px; font-size: 26px; text-align: center; margin-bottom: 20px; border: 2px solid #333; border-radius: 6px; box-sizing: border-box; }
+        .btn-main { width: 100%; padding: 15px; font-size: 32px; background-color: #2e7d32; color: white; border: 3px solid #1b5e20; border-radius: 8px; cursor: pointer; margin-bottom: 15px; transition: transform 0.1s; }
+        .btn-main:active { transform: scale(0.98); }
+        .btn-main:disabled { background-color: #9e9e9e; border-color: #757575; cursor: not-allowed; }
+        .btn-sub { background-color: #0288d1; border-color: #01579b; }
+        
+        .turn-select { display: flex; justify-content: space-between; margin-bottom: 25px; font-size: 28px; }
+        .turn-select label { cursor: pointer; display: flex; align-items: center; }
+        .turn-select input { transform: scale(1.5); margin-right: 8px; cursor: pointer; }
+
+        .guest-item { display: flex; justify-content: space-between; align-items: center; border: 2px solid #ccc; padding: 10px 15px; margin-bottom: 8px; background: white; border-radius: 6px; font-size: 24px; }
+        .guest-item.selected { border-color: #2e7d32; background: #e8f5e9; }
+        .btn-small { padding: 5px 10px; font-size: 20px; border: none; border-radius: 4px; cursor: pointer; margin-left: 5px; }
+
+        /* 인게임 스타일 */
+        .container { width: 540px; background: white; padding: 20px 30px; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); position: relative; }
+        .header { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 26px; color: #333; }
+        .hint-bar { background-color: #e3f2fd; color: #0d47a1; padding: 10px; border-radius: 5px; margin-bottom: 15px; font-size: 22px; text-align: center; min-height: 25px; border: 1px dashed #0d47a1; }
+        .timer-container { width: 100%; height: 12px; background-color: #d7ccc8; border-radius: 6px; margin-bottom: 25px; overflow: hidden; border: 1px solid #8d6e63; }
+        .timer-bar { width: 100%; height: 100%; background-color: #d32f2f; transition: width 0.1s linear; }
+
+        .board-wrapper { position: relative; width: 100%; aspect-ratio: 1; margin-bottom: 25px; background-color: #fcf8eb; border: 4px solid #222; box-sizing: border-box; }
+        .watermark { position: absolute; width: 33.333%; height: 33.333%; display: flex; justify-content: center; align-items: center; font-size: 160px; color: rgba(0, 0, 0, 0.08); pointer-events: none; z-index: 1; line-height: 1; }
+        .board { display: grid; grid-template-columns: repeat(9, 1fr); grid-template-rows: repeat(9, 1fr); width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 2; }
+        .cell { background-color: transparent; display: flex; align-items: center; justify-content: center; font-size: 38px; color: #222; cursor: pointer; transition: background-color 0.2s; border-right: 1px solid #aaa; border-bottom: 1px solid #aaa; box-sizing: border-box; }
+        .cell:nth-child(9n) { border-right: none; }
+        .cell:nth-last-child(-n+9) { border-bottom: none; }
+        /* 💡 [교체] 기존 .cell.highlight-box CSS를 아래 코드로 통째로 바꿉니다. */
+        .cell.highlight-box { background-color: rgba(100, 181, 246, 0.4); box-shadow: inset 0 0 15px rgba(33, 150, 243, 0.8); animation: pulseGlow 1.5s infinite alternate; }
+
+        /* 💡 [신규 추가] 빛나는 애니메이션 정의를 그 아래 추가합니다. */
+        @keyframes pulseGlow {
+            0% { box-shadow: inset 0 0 10px rgba(33, 150, 243, 0.6); background-color: rgba(100, 181, 246, 0.3); }
+            100% { box-shadow: inset 0 0 25px rgba(33, 150, 243, 1), 0 0 10px rgba(33, 150, 243, 0.7); background-color: rgba(100, 181, 246, 0.5); }
+        }
+        .cell.hoverable:hover { background-color: rgba(255, 235, 59, 0.4); }
+
+        .footer { display: flex; justify-content: flex-end; }
+        .btn-surrender { background-color: #d32f2f; color: white; border: none; padding: 10px 25px; font-size: 24px; border-radius: 5px; cursor: pointer; }
+        .btn-surrender:disabled { background-color: #e0e0e0; cursor: not-allowed; color: #999; }
+
+        .review-controls { display: none; width: 100%; background-color: #37474f; color: white; padding: 15px; border-radius: 8px; margin-bottom: 15px; font-size: 24px; text-align: center; box-sizing: border-box; justify-content: space-between; align-items: center; }
+        .btn-nav { background-color: #546e7a; color: white; border: none; padding: 8px 15px; font-size: 22px; border-radius: 5px; cursor: pointer; }
+        .btn-nav:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); justify-content: center; align-items: center; z-index: 10; }
+        .modal-content { background: #fcf8eb; padding: 30px; border-radius: 10px; text-align: center; width: 320px; border: 3px solid #333; }
+        .numpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px; }
+        .num-btn { height: 80px; font-size: 45px; border-radius: 8px; border: 2px solid #2c3e50; cursor: pointer; }
+        .num-btn.disabled { background-color: #e0e0e0; border-color: #bdbdbd; color: #9e9e9e; pointer-events: none; }
+        
+        .game-over-screen { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(252, 248, 235, 0.95); border-radius: 10px; flex-direction: column; justify-content: center; align-items: center; z-index: 5; }
+        .btn-action { border: none; padding: 12px 24px; font-size: 26px; border-radius: 6px; cursor: pointer; margin: 5px; }
+
+        /* 💡 [교체] 이모티콘 패널 왼쪽 아래로 이동 */
+        .chat-toggle-btn { position: fixed; bottom: 20px; left: 20px; background-color: #f39c12; color: white; border: none; border-radius: 50px; padding: 15px 25px; font-size: 24px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); z-index: 101; transition: transform 0.2s; }
+        .chat-toggle-btn:hover { transform: scale(1.05); }
+        
+        .emoticon-panel { position: fixed; bottom: 80px; left: 20px; background: rgba(255,255,255,0.95); padding: 10px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); border: 2px solid #ccc; display: none; z-index: 100; text-align: center; }
+        .emoticon-panel button { font-size: 32px; background: none; border: none; cursor: pointer; transition: transform 0.1s; margin: 0 5px; }
+        .emoticon-panel button:hover { transform: scale(1.2); }
+        
+        /* 알림창은 채팅버튼 위에 뜨도록 조정 */
+        .toast-popup { position: fixed; bottom: 150px; left: 20px; background: rgba(0,0,0,0.85); color: white; padding: 15px 30px; border-radius: 30px; font-size: 28px; display: none; z-index: 200; transition: opacity 0.3s; pointer-events: none; }
+
+        /* 💡 [신규] 왼쪽 위 오디오 컨트롤 UI */
+        .audio-control-btn { position: fixed; top: 20px; left: 20px; background-color: #34495e; color: white; border: none; border-radius: 50px; padding: 10px 20px; font-size: 20px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); z-index: 101; transition: transform 0.2s; }
+        .audio-control-btn:hover { transform: scale(1.05); }
+        .audio-panel { position: fixed; top: 70px; left: 20px; background: rgba(255,255,255,0.95); padding: 15px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); border: 2px solid #ccc; display: none; z-index: 100; text-align: left; font-size: 22px; width: 220px; }
+        .audio-panel label { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; cursor: pointer; }
+        .audio-panel input[type=range] { width: 110px; cursor: pointer; }
+
+        /* 💡 [신규] 크레딧 모달 스타일 */
+        .credits-content { background: #fcf8eb; padding: 30px; border-radius: 10px; text-align: left; width: 400px; border: 3px solid #333; max-height: 70vh; overflow-y: auto; }
+        .credits-content h2 { margin-top: 0; color: #d32f2f; text-align: center; font-size: 35px; border-bottom: 2px dashed #ccc; padding-bottom: 10px; }
+        .credits-content p { font-size: 24px; line-height: 1.5; color: #333; }
+        
+        /* 💡 [신규] 복기 턴 이동 UI 스타일 */
+        .jump-container { display: flex; align-items: center; gap: 5px; margin: 0 10px; }
+        .jump-input { width: 55px; text-align: center; font-size: 22px; padding: 5px; border-radius: 5px; border: 2px solid #546e7a; font-family: 'Nanum Pen Script', cursive; }
+        .btn-jump { background-color: #f39c12; color: white; border: none; padding: 6px 12px; font-size: 22px; border-radius: 5px; cursor: pointer; transition: transform 0.1s; }
+        .btn-jump:active { transform: scale(0.95); }
+    </style>
+</head>
+<body>
+    <button class="audio-control-btn" onclick="toggleAudioPanel()">🔊 소리 설정</button>
+    <div class="audio-panel" id="audioPanel">
+        <label>
+            <span>배경음(BGM)</span>
+            <input type="range" id="bgmVolume" min="0" max="1" step="0.1" value="0.3" onchange="updateVolume()">
+        </label>
+        <label>
+            <span>효과음(SFX)</span>
+            <input type="range" id="sfxVolume" min="0" max="1" step="0.1" value="0.5" onchange="updateVolume()">
+        </label>
+    </div>
+
+<div class="panel-screen" id="lobbyScreen">
+    <div class="title-text">스도쿠 듀얼</div>
+    <input type="text" id="nicknameInput" class="input-box" placeholder="닉네임 입력 (예: 관전자1)" maxlength="8">
+    <div style="margin-top: 25px; border-top: 2px dashed #ccc; padding-top: 25px;">
+        <button class="btn-main" onclick="createRoom()">방 만들기</button>
+        <input type="text" id="roomCodeInput" class="input-box" placeholder="4자리 방 코드 입력" maxlength="4" style="margin-top: 15px;">
+        <button class="btn-main btn-sub" onclick="joinRoom()">방 참가하기</button>
+        <div style="margin-top: 25px; border-top: 2px dashed #ccc; padding-top: 25px;">
+            <div class="lobby-label">게임 정보</div>
+            <button class="btn-main" style="background-color: #8e44ad; border-color: #732d91;" onclick="window.open('https://docs.google.com/document/d/13betuRp_yTCIeED3E6ux-5_dpCgTUaRrvkghC-uaYCU/edit?usp=drive_link', '_blank')">📜 스도쿠 듀얼 룰 보기</button>
+            <button class="btn-main" style="background-color: #7f8c8d; border-color: #606b6d; margin-bottom: 0;" onclick="openCreditsModal()">🎵 오디오 크레딧 (저작권)</button>
+        </div>
+    </div>
+    <div id="lobbyError" style="color: red; font-size: 22px;"></div>
+</div>
+
+<div class="panel-screen" id="waitingRoomScreen" style="display: none;">
+    <div class="title-text">대기실</div>
+    <div style="font-size: 30px; color: #d32f2f; margin-bottom: 10px;">방 코드: <strong id="waitRoomCode">----</strong></div>
+    
+    <div style="text-align: left; margin-bottom: 20px; font-size: 26px;">
+        <div id="waitHostName" style="margin-bottom: 10px; font-weight: bold;">방장: -</div>
+        <div style="border-bottom: 2px solid #ccc; padding-bottom: 5px;">참가자 목록</div>
+        <div id="guestListContainer" style="margin-top: 10px; max-height: 250px; overflow-y: auto;"></div>
+    </div>
+
+    <div id="hostControls" style="display: none; border-top: 2px dashed #ccc; padding-top: 20px;">
+        <div style="font-size: 24px; text-align: left; margin-bottom: 10px;">대결 턴 설정 (방장 기준)</div>
+        <div class="turn-select">
+            <label><input type="radio" name="turnPref" value="P1"> 선공</label>
+            <label><input type="radio" name="turnPref" value="P2"> 후공</label>
+            <label><input type="radio" name="turnPref" value="RANDOM" checked> 랜덤</label>
+        </div>
+        <button class="btn-main" id="startGameBtn" onclick="requestStartGame()" disabled>상대방 선택 대기 중...</button>
+    </div>
+
+    <div id="guestControls" style="display: none; border-top: 2px dashed #ccc; padding-top: 20px;">
+        <button class="btn-main btn-sub" id="readyBtn" onclick="toggleReady()">준비하기 (대기 중)</button>
+    </div>
+</div>
+
+<div class="container" id="gameContainer" style="display: none;">
+    <div class="review-controls" id="reviewControls">
+        <button class="btn-nav" id="btnPrevReplay" onclick="changeReplayStep(-1)">◀ 이전</button>
+        
+        <div class="jump-container">
+            <input type="number" id="jumpTurnInput" class="jump-input" value="0" min="0">
+            <span style="font-size: 22px;">/ <span id="maxTurnText">0</span> 수</span>
+            <button class="btn-jump" onclick="jumpToReplayStep()">이동</button>
+        </div>
+
+        <button class="btn-nav" id="btnNextReplay" onclick="changeReplayStep(1)">다음 ▶</button>
+        <button class="btn-nav" style="background-color: #d32f2f; margin-left: 10px;" onclick="backToGameOver()">종료</button>
+    </div>
+
+    <div class="title-text" style="font-size: 45px; margin-bottom: 10px;">스도쿠 듀얼</div>
+
+    <div class="header">
+        <div id="turnText">대기실 접속 중...</div>
+        <div id="scoreText">P1 [0점] vs P2 [0점]</div>
+    </div>
+    <div class="hint-bar" id="hintText">게임 세팅 중...</div>
+    <div class="timer-container"><div class="timer-bar" id="timerBar"></div></div>
+
+    <div class="board-wrapper">
+        <div class="watermark" style="top: 0%; left: 0%;">1</div><div class="watermark" style="top: 0%; left: 33.333%;">2</div><div class="watermark" style="top: 0%; left: 66.666%;">3</div>
+        <div class="watermark" style="top: 33.333%; left: 0%;">4</div><div class="watermark" style="top: 33.333%; left: 33.333%;">5</div><div class="watermark" style="top: 33.333%; left: 66.666%;">6</div>
+        <div class="watermark" style="top: 66.666%; left: 0%;">7</div><div class="watermark" style="top: 66.666%; left: 33.333%;">8</div><div class="watermark" style="top: 66.666%; left: 66.666%;">9</div>
+        <div class="board" id="sudokuBoard"></div>
+    </div>
+
+    <div class="footer">
+        <button class="btn-surrender" id="surrenderBtn" onclick="surrender()" disabled>항복하기</button>
+    </div>
+
+    <div class="game-over-screen" id="gameOverScreen">
+        <div style="font-size: 60px; color: #d32f2f; margin-bottom: 10px;">GAME OVER</div>
+        <div id="winnerAnounce" style="font-size: 35px; color: #333; margin-bottom: 30px;">승리자 발표</div>
+        <div>
+            <button class="btn-action" style="background: #0288d1; color: white;" onclick="startReviewMode()">🔎 복기하기</button>
+            <button class="btn-action" style="background: #2e7d32; color: white;" onclick="backToWaitingRoom()">대기실로 돌아가기</button>
+        </div>
+    </div>
+</div>
+
+<button class="chat-toggle-btn" onclick="toggleEmoticonPanel()">💬 이모티콘</button>
+
+<div class="emoticon-panel" id="emoticonPanel">
+    <div style="font-size: 16px; margin-bottom: 5px; font-weight: bold; color: #333;">감정표현</div>
+    <button onclick="sendEmoticon('👍')">👍</button>
+    <button onclick="sendEmoticon('👏')">👏</button>
+    <button onclick="sendEmoticon('😮')">😮</button>
+    <button onclick="sendEmoticon('🤔')">🤔</button>
+    <button onclick="sendEmoticon('😭')">😭</button>
+</div>
+
+<div class="toast-popup" id="emoticonToast">
+    <span id="emoticonSender" style="color: #f1c40f; font-weight: bold;"></span>: <span id="emoticonValue" style="font-size: 36px; vertical-align: middle;"></span>
+</div>
+
+<div class="modal-overlay" id="creditsModal" onclick="closeCreditsModal()">
+    <div class="credits-content" onclick="event.stopPropagation()">
+        <h2>오디오 크레딧</h2>
+        <div id="creditsText">
+            <p>스도쿠 듀얼에 사용된 오디오 에셋 출처입니다.</p>
+            <p>
+                gameover.mp3<br>
+                ✔ SFX provided by 셀바이뮤직<br>
+                🎵 Title : A Tone Sound<br>
+                https://sellbuymusic.com/md/seuiuzc-vfzckzc<br>
+                <br>
+                bell.mp3<br>
+                ✔ SFX provided by 셀바이뮤직<br>
+                🎵 Title : Bell 9<br>
+                https://sellbuymusic.com/md/suenccb-ifzckzc<br>
+                <br>
+                hurry.mp3<br>
+                ✔ SFX provided by 셀바이뮤직<br>
+                🎵 Title : Anxiety 1<br>
+                https://sellbuymusic.com/md/soanxbt-rfzckzc<br>
+                <br>
+                pencil.mp3<br>
+                freesound_community-Pencil Writing on Paper<br>
+                <br>
+                bgm.mp3<br>
+                Gemini-The Weighted Grid
+            </p>
+        </div>
+        <button class="btn-cancel" style="margin-top: 20px; display: block;" onclick="closeCreditsModal()">닫기</button>
+    </div> </div> <div class="modal-overlay" id="numpadModal" onclick="cancelNumpad()">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <div style="font-size: 28px; margin-bottom: 20px;" id="modalTitle">숫자를 선택하세요</div>
+        <div class="numpad" id="numpadGrid"></div>
+        <button style="width: 100%; padding: 12px; font-size: 26px; background: #7f8c8d; color: white; border: none; border-radius: 8px; cursor: pointer;" id="cancelBtn" onclick="cancelNumpad()">🔙 취소</button>
+    </div>
+</div>
+
+<script>
+    // 이 아래부터 기존의 <script> 코드가 시작됩니다.
+    const socket = io();
+
+// 💡 [교체] 기존 따옴표("")로 되어 있던 소리 코드를 지우고, 아래처럼 백틱(``)으로 감싸서 교체해 주세요.
+// 💡 [교체] 길고 깨졌던 텍스트 데이터를 지우고, 깔끔하게 파일 경로로 연결합니다.
+    // 💡 [교체] 신규 오디오 객체들
+    const sndPencil = new Audio('/pencil.mp3');
+    const sndBell = new Audio('/bell.mp3');
+    const sndBgm = new Audio('/bgm.mp3');
+    const sndGameOver = new Audio('/gameover.mp3');
+    const sndHurry = new Audio('/hurry.mp3');
+
+    sndBgm.loop = true; // BGM 무한 반복 설정
+    let isHurryPlayed = false; // 시간 임박 사운드 중복 재생 방지
+
+    // 💡 [신규] 볼륨 조절 및 패널 토글 함수
+    function updateVolume() {
+        const bgmVol = document.getElementById('bgmVolume').value;
+        const sfxVol = document.getElementById('sfxVolume').value;
+        sndBgm.volume = bgmVol;
+        sndPencil.volume = sfxVol;
+        sndBell.volume = sfxVol;
+        sndGameOver.volume = sfxVol;
+        sndHurry.volume = sfxVol;
+    }
+    
+    function toggleAudioPanel() {
+        const panel = document.getElementById('audioPanel');
+        panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+    }
+
+    function playSound(audioObj) {
+        if (!audioObj || audioObj.volume === 0) return;
+        audioObj.currentTime = 0;
+        audioObj.play().catch(err => console.warn("재생 실패:", err));
+    }
+
+    updateVolume(); // 시작 시 볼륨 초기화 적용
+
+    document.body.addEventListener('click', function unlockAudio() {
+        // 모든 소리의 잠금을 일괄 해제합니다.
+        [sndPencil, sndBell, sndBgm, sndGameOver, sndHurry].forEach(snd => {
+            snd.play().then(() => { snd.pause(); snd.currentTime = 0; }).catch(() => {});
+        });
+        document.body.removeEventListener('click', unlockAudio);
+    }, { once: true });
+
+    let isMyHost = false;
+    let myPlayerNumber = null;
+    let myId = null;
+    let currentRoomCode = null;
+    let playerNames = { 1: '', 2: '' };
+
+    let board = Array.from({length: 9}, () => Array(9).fill(0));
+    let currentPlayer = 1;
+    let requiredNextBox = null;
+    let isGameOver = false;
+    let isOpeningPhase = true;
+    let openingNumber = null;
+    let isFirstTurn = true;
+    let scores = {1: 0, 2: 0};
+    let isGameStarted = false;
+
+    let gameHistory = [];
+    let currentReplayStep = 0;
+    let isReviewMode = false;
+
+    let selectedRow = null; let selectedCol = null;
+    const TURN_LIMIT = 60; let timeLeft = TURN_LIMIT; let timerInterval = null;
+
+    const boardEl = document.getElementById('sudokuBoard');
+    for (let r = 0; r < 9; r++) {
+        for (let c = 0; c < 9; c++) {
+            const cell = document.createElement('div');
+            cell.classList.add('cell');
+            cell.dataset.row = r; cell.dataset.col = c;
+            if (c % 3 === 2 && c !== 8) cell.style.borderRight = "3px solid #222";
+            if (r % 3 === 2 && r !== 8) cell.style.borderBottom = "3px solid #222";
+            cell.addEventListener('click', () => onCellClick(r, c));
+            boardEl.appendChild(cell);
+        }
+    }
+
+    function getNickname() { return document.getElementById('nicknameInput').value.trim() || "익명"; }
+
+    function createRoom() { socket.emit('createRoom', { nickname: getNickname() }); }
+    function joinRoom() {
+        const rc = document.getElementById('roomCodeInput').value.trim();
+        if(rc.length === 4) socket.emit('joinRoom', { roomCode: rc, nickname: getNickname() });
+    }
+
+    socket.on('roomJoined', (data) => {
+        currentRoomCode = data.roomCode;
+        isMyHost = data.isHost;
+        myId = data.myId;
+        myPlayerNumber = null; 
+        
+        document.getElementById('lobbyScreen').style.display = 'none';
+        document.getElementById('gameContainer').style.display = 'none';
+        document.getElementById('waitingRoomScreen').style.display = 'block';
+        document.getElementById('waitRoomCode').innerText = currentRoomCode;
+
+        if (isMyHost) {
+            document.getElementById('hostControls').style.display = 'block';
+        } else {
+            document.getElementById('guestControls').style.display = 'block';
+        }
+    });
+
+    // 방장 위임 관련 통보 수신
+    socket.on('hostTransferred', () => {
+        isMyHost = true;
+        document.getElementById('guestControls').style.display = 'none';
+        document.getElementById('hostControls').style.display = 'block';
+        alert('👑 방장 권한을 위임받았습니다!');
+    });
+    socket.on('hostDemoted', () => {
+        isMyHost = false;
+        document.getElementById('hostControls').style.display = 'none';
+        document.getElementById('guestControls').style.display = 'block';
+        alert('방장 권한을 위임하여 참가자로 전환되었습니다.');
+    });
+
+    socket.on('roomStateUpdated', (room) => {
+        document.getElementById('waitHostName').innerText = `방장: ${room.creator.nickname}`;
+        const container = document.getElementById('guestListContainer');
+        container.innerHTML = '';
+
+        if (room.guests.length === 0) {
+            container.innerHTML = '<div style="color: #777;">아직 참가자가 없습니다.</div>';
+        }
+
+        let isSelectedGuestReady = false;
+
+        room.guests.forEach(guest => {
+            const isSelected = guest.id === room.selectedGuestId;
+            if (isSelected) isSelectedGuestReady = guest.isReady;
+
+            const div = document.createElement('div');
+            div.className = `guest-item ${isSelected ? 'selected' : ''}`;
+            let statusText = guest.isReady ? '✅ 준비완료' : '⏳ 대기중';
+            let titleText = isSelected ? ' (⚔️ 대결 상대)' : '';
+            
+            let innerHTML = `<span>${guest.nickname}${titleText} - ${statusText}</span><div>`;
+
+            // 💡 [버그 픽스 & 기능 추가] 클라이언트의 방 번호 변수(currentRoomCode)를 명확히 사용하여 호출합니다.
+            if (isMyHost) {
+                if (!isSelected) {
+                    innerHTML += `<button class="btn-small" style="background:#f1c40f;" onclick="socket.emit('selectOpponent', {roomCode: currentRoomCode, targetId:'${guest.id}'})">선택</button>`;
+                }
+                innerHTML += `<button class="btn-small" style="background:#e74c3c; color:white;" onclick="socket.emit('kickPlayer', {roomCode: currentRoomCode, targetId:'${guest.id}'})">추방</button>`;
+                innerHTML += `<button class="btn-small" style="background:#9b59b6; color:white;" onclick="socket.emit('transferHost', {roomCode: currentRoomCode, targetId:'${guest.id}'})">방장 위임</button>`;
+            }
+            innerHTML += `</div>`;
+            div.innerHTML = innerHTML;
+            container.appendChild(div);
+
+            if (!isMyHost && guest.id === myId) {
+                const btn = document.getElementById('readyBtn');
+                if (guest.isReady) {
+                    btn.innerText = "준비 완료 취소";
+                    btn.style.backgroundColor = "#7f8c8d"; btn.style.borderColor = "#606b6d";
+                } else {
+                    btn.innerText = "대결 준비하기!";
+                    btn.style.backgroundColor = "#0288d1"; btn.style.borderColor = "#01579b";
+                }
+            }
+        });
+
+        if (isMyHost) {
+            const startBtn = document.getElementById('startGameBtn');
+            if (room.guests.length === 0) {
+                startBtn.disabled = true; startBtn.innerText = "참가자를 기다리는 중...";
+            } else if (!isSelectedGuestReady) {
+                startBtn.disabled = true; startBtn.innerText = "상대방 준비 대기 중...";
+            } else {
+                startBtn.disabled = false; startBtn.innerText = "⚔️ 게임 시작하기";
+            }
+        }
+    });
+
+    // 이모티콘 전송 및 수신
+    let emoticonTimeout;
+    function sendEmoticon(emo) {
+        if(!currentRoomCode) return;
+        socket.emit('sendEmoticon', { roomCode: currentRoomCode, emoticon: emo });
+        document.getElementById('emoticonPanel').style.display = 'none'; // 전송 후 패널 자동 닫기
+    }
+
+    function toggleEmoticonPanel() {
+        const panel = document.getElementById('emoticonPanel');
+        panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+    }
+
+    function backToGameOver() {
+        isReviewMode = false;
+        document.getElementById('reviewControls').style.display = 'none';
+        document.getElementById('gameOverScreen').style.display = 'flex';
+        updateUI(); // 복기 전의 원래 보드 상태로 되돌립니다.
+    }
+    
+    socket.on('receiveEmoticon', (data) => {
+        const toast = document.getElementById('emoticonToast');
+        document.getElementById('emoticonSender').innerText = data.senderName;
+        document.getElementById('emoticonValue').innerText = data.emoticon;
+        
+        toast.style.display = 'block';
+        toast.style.opacity = '1';
+
+        clearTimeout(emoticonTimeout);
+        emoticonTimeout = setTimeout(() => {
+            toast.style.opacity = '0';
+            setTimeout(() => toast.style.display = 'none', 300);
+        }, 2000);
+    });
+
+    function toggleReady() { socket.emit('toggleReady', currentRoomCode); }
+    function requestStartGame() {
+        const turnPref = document.querySelector('input[name="turnPref"]:checked').value;
+        socket.emit('startGame', { roomCode: currentRoomCode, turnPref });
+    }
+
+    socket.on('kicked', () => { alert('방장에 의해 추방되었습니다.'); location.reload(); });
+    socket.on('roomDestroyed', () => { alert('방장이 방을 종료했습니다.'); location.reload(); });
+    socket.on('joinError', (msg) => { document.getElementById('lobbyError').innerText = msg; });
+
+    socket.on('roleAssigned', (data) => { myPlayerNumber = data.playerNumber; });
+
+    // 💡 [교체] 기존 gameStart 수신부를 아래 코드로 통째로 덮어씌웁니다.
+// 💡 [완벽 교체] 중복되어 있던 2개의 gameStart 수신부를 모두 지우고 이 코드 하나만 남기세요!
+    socket.on('gameStart', (data) => {
+        // 💡 [디버깅 추가] 데이터가 제대로 들어오는지 확인합니다.
+        console.log("게임 시작 신호 수신됨!");
+        console.log("서버가 보내준 데이터(data):", data);
+        console.log("내 소켓 ID (socket.id):", socket.id);
+
+        if (data.roles && data.roles[socket.id]) {
+            myPlayerNumber = data.roles[socket.id];
+            console.log("내 역할 배정 완료:", myPlayerNumber);
+        } else {
+            console.error("역할 배정 실패! 서버의 roles 데이터에 내 ID가 없습니다.");
+        }
+        // 💡 [핵심 버그 픽스] 서버가 발급해 준 내 고유 ID(myId)를 사용해 내 플레이어 번호를 100% 확실하게 부여받습니다.
+        if (data.roles && data.roles[myId]) {
+            myPlayerNumber = data.roles[myId];
+        }
+
+        playerNames = data.players;
+        board = Array.from({length: 9}, () => Array(9).fill(0));
+        scores = {1: 0, 2: 0};
+        currentPlayer = 2; 
+        isOpeningPhase = true;
+        openingNumber = null;
+        isFirstTurn = true;
+        requiredNextBox = null;
+        isGameOver = false;
+        isGameStarted = true;
+        isReviewMode = false;
+        gameHistory = [];
+        
+        document.getElementById('waitingRoomScreen').style.display = 'none';
+        document.getElementById('gameOverScreen').style.display = 'none';
+        document.getElementById('reviewControls').style.display = 'none';
+        document.getElementById('gameContainer').style.display = 'block';
+
+        // 배경음악 재생
+        sndBgm.play().catch(()=>{});
+
+        // 💡 게임 시작 직후 타이머를 바로 작동시킵니다.
+        startTimer();
+        updateUI();
+        
+        // 💡 내가 2P(후공)라면 정확하게 모달창과 방울 소리를 띄웁니다.
+        if (myPlayerNumber === 2) {
+            playSound(sndBell);
+            openNumpadModal(true);
+        }
+    });
+
+    // 💡 [교체] moveApproved 전체 로직에서 play()를 playSound()로 변경합니다.
+    socket.on('moveApproved', (data) => {
+        const move = data.move;
+        const result = data.turnResult;
+
+        if (move.isOpening) {
+            openingNumber = move.number;
+            isOpeningPhase = false;
+            currentPlayer = 1;
+            
+            if (myPlayerNumber === 1) playSound(sndBell); // 💡 교체됨
+
+            updateUI();
+            startTimer();
+        } else {
+            // 보드에 숫자 기록 및 연필 소리 재생
+            board[move.row][move.col] = move.number;
+            playSound(sndPencil); // 💡 교체됨
+            
+            if (result) {
+                if (result.isGameOver) {
+                    gameHistory = result.history;
+                    endGame(result.winner, result.isSuffocated, false);
+                    return;
+                }
+
+                scores = result.scores;
+                currentPlayer = result.nextPlayer;
+                requiredNextBox = result.requiredNextBox;
+                isFirstTurn = result.isFirstTurn;
+                
+                // 내 턴이 되었을 때만 방울 소리 재생
+                if (result.nextPlayer === myPlayerNumber) {
+                    playSound(sndBell); // 💡 교체됨
+                }
+            } else {
+                isFirstTurn = false;
+                requiredNextBox = move.number;
+                currentPlayer = 2;
+                
+                if (myPlayerNumber === 2) playSound(sndBell); // 💡 교체됨
+            }
+
+            updateUI();
+            startTimer();
+        }
+    });
+    
+    function getBoxFromRowCol(r, c) { return Math.floor(r / 3) * 3 + Math.floor(c / 3) + 1; }
+    
+    function checkUIIsValid(row, col, num) {
+        for (let c = 0; c < 9; c++) if (board[row][c] === num) return false;
+        for (let r = 0; r < 9; r++) if (board[r][col] === num) return false;
+        const sR = Math.floor(row / 3) * 3; const sC = Math.floor(col / 3) * 3;
+        for (let r = sR; r < sR + 3; r++) {
+            for (let c = sC; c < sC + 3; c++) if (board[r][c] === num) return false;
+        }
+        return true;
+    }
+
+    function onCellClick(r, c) {
+        if (!isGameStarted || isGameOver || isOpeningPhase || isReviewMode || board[r][c] !== 0) return;
+        if (currentPlayer !== myPlayerNumber) return;
+
+        const bigBox = getBoxFromRowCol(r, c);
+        if (requiredNextBox !== null && bigBox !== requiredNextBox) return;
+
+        if (isFirstTurn) {
+            socket.emit('playerMove', { roomCode: currentRoomCode, move: { row: r, col: c, number: openingNumber, bigBox } });
+            return;
+        }
+
+        selectedRow = r; selectedCol = c;
+        openNumpadModal(false);
+    }
+
+    // 💡 [교체] 숫자 패드 띄우기 함수 (안전장치 추가됨)
+    function openNumpadModal(isOpening) {
+        const modal = document.getElementById('numpadModal');
+        const grid = document.getElementById('numpadGrid');
+        
+        // 방어막: 만약 HTML 요소가 없으면 에러를 뿜지 않고 콘솔에 경고만 띄웁니다.
+        if (!modal || !grid) {
+            console.error("🚨 HTML에서 numpadModal 또는 numpadGrid를 찾을 수 없습니다!");
+            return;
+        }
+
+        grid.innerHTML = '';
+        document.getElementById('modalTitle').innerText = isOpening ? "[오프닝] 선공의 첫 숫자를 결정하세요" : "기입할 숫자를 선택하세요";
+        document.getElementById('cancelBtn').style.display = isOpening ? 'none' : 'block';
+
+        for (let n = 1; n <= 9; n++) {
+            const btn = document.createElement('button');
+            btn.classList.add('num-btn');
+            btn.innerText = n;
+            if (!isOpening && selectedRow !== null && !checkUIIsValid(selectedRow, selectedCol, n)) btn.classList.add('disabled');
+
+            btn.addEventListener('click', () => {
+                if (isOpening) {
+                    socket.emit('playerMove', { roomCode: currentRoomCode, move: { isOpening: true, number: n } });
+                } else {
+                    const bigBox = getBoxFromRowCol(selectedRow, selectedCol);
+                    socket.emit('playerMove', { roomCode: currentRoomCode, move: { row: selectedRow, col: selectedCol, number: n, bigBox } });
+                    selectedRow = null; selectedCol = null;
+                }
+                modal.style.display = 'none';
+            });
+            grid.appendChild(btn);
+        }
+        modal.style.display = 'flex';
+    }
+
+    function cancelNumpad() { if(!isOpeningPhase) document.getElementById('numpadModal').style.display = 'none'; }
+
+    // 💡 [버그 픽스] 서버의 통일된 판정으로 항복과 게임 종료 처리
+    socket.on('gameSurrendered', (data) => {
+        gameHistory = data.history || []; // 💡 항복 시에도 서버가 보내준 기보를 저장합니다!
+        endGame(data.winnerRole, false, true);
+    });
+
+    function endGame(gameWinner, isSuffocated, isSurrendered) {
+        isGameOver = true;
+        clearInterval(timerInterval);
+
+        sndBgm.pause();
+        sndBgm.currentTime = 0;
+        playSound(sndGameOver);
+
+        updateUI();
+        
+        const announce = document.getElementById('winnerAnounce');
+        const wName = playerNames[gameWinner];
+        
+        if (isSurrendered) announce.innerHTML = `🏳️ 상대방의 기권!<br>🎉 승리: ${wName}`;
+        else if (isSuffocated) announce.innerHTML = `💀 질식 상태 패배!<br>🎉 승리: ${wName}`;
+        else announce.innerHTML = `🎉 최종 승리자: ${wName}`;
+        
+        document.getElementById('gameOverScreen').style.display = 'flex';
+    }
+
+    function backToWaitingRoom() {
+        document.getElementById('gameContainer').style.display = 'none';
+        document.getElementById('waitingRoomScreen').style.display = 'block';
+    }
+
+    function startReviewMode() {
+        isReviewMode = true;
+        currentReplayStep = gameHistory.length; 
+        document.getElementById('gameOverScreen').style.display = 'none';
+        document.getElementById('reviewControls').style.display = 'flex';
+        renderReplayBoard();
+    }
+
+    function changeReplayStep(delta) {
+        currentReplayStep += delta;
+        if (currentReplayStep < 0) currentReplayStep = 0;
+        if (currentReplayStep > gameHistory.length) currentReplayStep = gameHistory.length;
+
+        // 💡 [신규] 이전/다음 수를 넘길 때 연필 소리가 납니다.
+        playSound(sndPencil);
+        
+        renderReplayBoard();
+    }
+
+    // 💡 [버그 픽스] 스코프 밖으로 빠져나갔던 '마지막 수' 변수를 안전하게 분리
+    function renderReplayBoard() {
+        const tempBoard = Array.from({length: 9}, () => Array(9).fill(0));
+        for(let i = 0; i < currentReplayStep; i++) {
+            const move = gameHistory[i];
+            tempBoard[move.row][move.col] = move.number;
+        }
+
+        const lastMove = currentReplayStep > 0 ? gameHistory[currentReplayStep - 1] : null;
+
+        const cells = document.querySelectorAll('.cell');
+        cells.forEach(cell => {
+            const r = parseInt(cell.dataset.row); const c = parseInt(cell.dataset.col);
+            const val = tempBoard[r][c];
+            cell.innerText = val !== 0 ? val : '';
+            cell.classList.remove('hoverable', 'highlight-box');
+            
+            // i 변수를 찾지 못하던 에러 대신, 밖에서 안전하게 찾은 lastMove를 비교합니다.
+            if (lastMove && lastMove.row === r && lastMove.col === c) {
+                cell.style.backgroundColor = "rgba(46, 125, 50, 0.3)";
+            } else {
+                cell.style.backgroundColor = "transparent";
+            }
+        });
+
+        // 💡 [교체] renderReplayBoard() 함수 아랫부분: 텍스트 대신 Input 값과 Max 값을 갱신합니다.
+        document.getElementById('jumpTurnInput').value = currentReplayStep;
+        document.getElementById('jumpTurnInput').max = gameHistory.length;
+        document.getElementById('maxTurnText').innerText = gameHistory.length;
+        
+        document.getElementById('btnPrevReplay').disabled = (currentReplayStep === 0);
+        document.getElementById('btnNextReplay').disabled = (currentReplayStep === gameHistory.length);
+        document.getElementById('hintText').innerText = "🔎 [이전/다음] 버튼이나 숫자를 입력해 복기하세요.";
+    } // <-- renderReplayBoard 함수 끝
+
+    function startTimer() {
+        clearInterval(timerInterval);
+        timeLeft = TURN_LIMIT;
+        isHurryPlayed = false; // 💡 턴마다 경고음 리셋
+        document.getElementById('timerBar').style.width = '100%';
+        
+        timerInterval = setInterval(() => {
+            if (isGameOver || isReviewMode) { clearInterval(timerInterval); return; }
+            timeLeft -= 0.1;
+            document.getElementById('timerBar').style.width = Math.max(0, (timeLeft / TURN_LIMIT) * 100) + '%';
+            
+            // 💡 [신규] 10초 이하로 남았을 때 딱 한 번만 긴박한 소리 재생
+            if (timeLeft <= 10.0 && !isHurryPlayed) {
+                playSound(sndHurry);
+                isHurryPlayed = true;
+            }
+
+            if (timeLeft <= 0) { clearInterval(timerInterval); if(currentPlayer === myPlayerNumber) surrender(); }
+        }, 100);
+    }
+
+    function surrender() { socket.emit('playerSurrender', currentRoomCode); }
+    socket.on('opponentDisconnected', () => {
+        if(!isGameOver) { alert('플레이어가 게임에서 나갔습니다.'); location.reload(); }
+    });
+
+    function updateUI() {
+        if (isReviewMode) return; 
+
+        const cells = document.querySelectorAll('.cell');
+        cells.forEach(cell => {
+            const r = parseInt(cell.dataset.row); const c = parseInt(cell.dataset.col);
+            const val = board[r][c]; const bigBox = getBoxFromRowCol(r, c);
+            
+            cell.innerText = val !== 0 ? val : '';
+            cell.classList.remove('hoverable', 'highlight-box');
+            cell.style.backgroundColor = "transparent";
+
+            if (isGameStarted && val === 0 && !isGameOver && !isOpeningPhase && currentPlayer === myPlayerNumber) {
+                if (requiredNextBox === null || bigBox === requiredNextBox) {
+                    cell.classList.add('hoverable');
+                    if (requiredNextBox !== null) cell.classList.add('highlight-box');
+                }
+            }
+        });
+
+        if (!isGameStarted) return;
+
+        document.getElementById('scoreText').innerText = `${playerNames[1]} [${scores[1]}점] vs ${playerNames[2]} [${scores[2]}점]`;
+        const isMyTurn = (currentPlayer === myPlayerNumber);
+        
+        if (myPlayerNumber === null) {
+            document.getElementById('turnText').innerText = `👀 관전 중 (현재 턴: ${playerNames[currentPlayer]})`;
+            document.getElementById('surrenderBtn').disabled = true;
+        } else {
+            document.getElementById('turnText').innerText = isMyTurn ? `🟢 나의 턴 (${playerNames[currentPlayer]})` : `🔴 상대방 대기 중...`;
+            document.getElementById('surrenderBtn').disabled = isGameOver || isOpeningPhase || !isMyTurn;
+        }
+
+        const hintEl = document.getElementById('hintText');
+        if (isOpeningPhase) {
+            hintEl.innerText = myPlayerNumber === 2 ? "⏳ [오프닝] 선공이 쓸 첫 숫자를 골라주세요." : "⏳ 상대방이 첫 숫자를 정하고 있습니다.";
+        } else if (isFirstTurn) {
+            hintEl.innerText = isMyTurn ? `✨ 자유 구역. 원하는 빈칸에 [${openingNumber}] 기입.` : `상대방이 [${openingNumber}]를 배치 중입니다.`;
+        } else if (requiredNextBox !== null) {
+            hintEl.innerText = isMyTurn ? `💥 제약 조건: [${requiredNextBox}번 큰 칸] 내부에 숫자를 놓으세요.` : `상대방이 [${requiredNextBox}번 큰 칸]에 배치 중입니다.`;
+        } else {
+            hintEl.innerText = isMyTurn ? "✨ 프리 턴: 빈칸을 자유롭게 클릭하세요." : "상대방이 프리 턴으로 배치 중입니다.";
+        }
+    }
+    // 💡 [신규] 크레딧 모달 열기/닫기 함수
+    function openCreditsModal() {
+        document.getElementById('creditsModal').style.display = 'flex';
+    }
+    function closeCreditsModal() {
+        document.getElementById('creditsModal').style.display = 'none';
+    }
+
+    // 💡 [신규] 복기 모드에서 특정 턴 수로 이동하는 함수
+    function jumpToReplayStep() {
+        const inputVal = parseInt(document.getElementById('jumpTurnInput').value);
+        if (isNaN(inputVal) || inputVal < 0 || inputVal > gameHistory.length) {
+            alert(`0에서 ${gameHistory.length} 사이의 숫자를 입력해주세요.`);
+            return;
+        }
+        
+        playSound(sndPencil); // 이동 시 연필 소리 출력
+        currentReplayStep = inputVal;
+        renderReplayBoard();
+    }
+</script>
+</body>
+</html>
