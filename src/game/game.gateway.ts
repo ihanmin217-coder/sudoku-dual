@@ -104,6 +104,7 @@ export class GameGateway implements OnGatewayDisconnect {
   }
 
   // 💡 [교체] 방 개설 시 비밀방(isPrivate) 옵션을 받아 저장합니다.
+  // 💡 [수정] 방 생성 시 turnLimit(제한 시간) 속성을 추가로 저장합니다.
   @SubscribeMessage('createRoom')
   handleCreateRoom(@MessageBody() data: { nickname: string, isPrivate: boolean }, @ConnectedSocket() client: Socket) {
     const roomCode = Math.floor(1000 + Math.random() * 9000).toString();
@@ -111,7 +112,8 @@ export class GameGateway implements OnGatewayDisconnect {
       creator: { id: client.id, nickname: data.nickname },
       guests: [],
       selectedGuestId: null,
-      isPrivate: data.isPrivate // 비밀방 여부 저장
+      isPrivate: data.isPrivate,
+      turnLimit: 60 // 💡 [신규] 기본 제한 시간 60초
     };
     client.join(roomCode);
     client.emit('roomJoined', { roomCode, isHost: true, myId: client.id });
@@ -232,7 +234,8 @@ export class GameGateway implements OnGatewayDisconnect {
     // 게임 시작(gameStart) 신호를 보낼 때 유저들의 역할(roles)을 아예 한 통에 묶어서 보냅니다!
     this.server.to(data.roomCode).emit('gameStart', {
       players: { 1: gameRoom.players[1].nickname, 2: gameRoom.players[2].nickname },
-      roles: { [room.creator.id]: creatorRole, [selectedGuest.id]: guestRole }
+      roles: { [room.creator.id]: creatorRole, [selectedGuest.id]: guestRole },
+      turnLimit: room.turnLimit // 💡 [신규 추가] 결정된 턴 시간을 브라우저에 전달
     });
     this.broadcastRoomList();
   }
@@ -272,6 +275,16 @@ export class GameGateway implements OnGatewayDisconnect {
       const winnerRole = loserRole === 1 ? 2 : 1;
       // 💡 [핵심 수정] 항복 시에도 gameRoom.history를 클라이언트에게 전송합니다!
       this.server.to(roomCode).emit('gameSurrendered', { winnerRole, history: gameRoom.history });
+    }
+  }
+
+  // 💡 [신규] 방장이 제한 시간을 변경했을 때 처리하는 함수
+  @SubscribeMessage('updateTimeLimit')
+  handleUpdateTimeLimit(@MessageBody() data: { roomCode: string; timeLimit: number }, @ConnectedSocket() client: Socket) {
+    const room = this.matchingRooms[data.roomCode];
+    if (room && room.creator.id === client.id) {
+      room.turnLimit = data.timeLimit;
+      this.broadcastRoomState(data.roomCode); // 변경된 시간을 대기실 모두에게 방송
     }
   }
 }

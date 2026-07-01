@@ -153,15 +153,29 @@
 
 <div class="panel-screen" id="waitingRoomScreen" style="display: none;">
     <div class="title-text">대기실</div>
-    <div style="font-size: 30px; color: #d32f2f; margin-bottom: 10px;">방 코드: <strong id="waitRoomCode">----</strong></div>
+    
+    <div style="font-size: 30px; color: #d32f2f; margin-bottom: 10px; display: flex; justify-content: center; align-items: center;">
+        <span>방 코드: <strong id="waitRoomCode">----</strong></span>
+        <button class="btn-small" id="toggleCodeBtn" style="background:#546e7a; color:white; margin-left: 15px;" onclick="toggleRoomCodeVisibility()">👀 숨기기</button>
+    </div>
     
     <div style="text-align: left; margin-bottom: 20px; font-size: 26px;">
-        <div id="waitHostName" style="margin-bottom: 10px; font-weight: bold;">방장: -</div>
+        <div id="waitHostName" style="margin-bottom: 5px; font-weight: bold;">방장: -</div>
+        <div id="waitTurnLimitInfo" style="margin-bottom: 10px; color: #e67e22; font-weight: bold;">⏳ 제한 시간: 60초</div>
+        
         <div style="border-bottom: 2px solid #ccc; padding-bottom: 5px;">참가자 목록</div>
         <div id="guestListContainer" style="margin-top: 10px; max-height: 250px; overflow-y: auto;"></div>
     </div>
 
     <div id="hostControls" style="display: none; border-top: 2px dashed #ccc; padding-top: 20px;">
+        <div style="font-size: 24px; text-align: left; margin-bottom: 10px;">⏳ 턴 제한 시간 (방장 전용)</div>
+        <select id="timeLimitSelect" class="input-box" style="margin-bottom: 20px; width: 100%;" onchange="changeTimeLimit()">
+            <option value="30">30초 (스피드전)</option>
+            <option value="60" selected>60초 (기본)</option>
+            <option value="90">90초 (장고)</option>
+            <option value="9999">무제한 (연습용)</option>
+        </select>
+
         <div style="font-size: 24px; text-align: left; margin-bottom: 10px;">대결 턴 설정 (방장 기준)</div>
         <div class="turn-select">
             <label><input type="radio" name="turnPref" value="P1"> 선공</label>
@@ -310,6 +324,29 @@
     sndBgm.loop = true; // BGM 무한 반복 설정
     let isHurryPlayed = false; // 시간 임박 사운드 중복 재생 방지
 
+    // 💡 [신규] 방 코드 숨기기/보이기 기능
+    let isRoomCodeHidden = false;
+    function toggleRoomCodeVisibility() {
+        isRoomCodeHidden = !isRoomCodeHidden;
+        const codeEl = document.getElementById('waitRoomCode');
+        const btn = document.getElementById('toggleCodeBtn');
+        if (isRoomCodeHidden) {
+            codeEl.innerText = "****";
+            btn.innerText = "👀 보이기";
+            btn.style.backgroundColor = "#e74c3c";
+        } else {
+            codeEl.innerText = currentRoomCode;
+            btn.innerText = "👀 숨기기";
+            btn.style.backgroundColor = "#546e7a";
+        }
+    }
+
+    // 💡 [신규] 방장이 시간 제한을 변경했을 때 서버에 알림
+    function changeTimeLimit() {
+        const val = parseInt(document.getElementById('timeLimitSelect').value);
+        socket.emit('updateTimeLimit', { roomCode: currentRoomCode, timeLimit: val });
+    }
+
     // 💡 [신규] 볼륨 조절 및 패널 토글 함수
     function updateVolume() {
         const bgmVol = document.getElementById('bgmVolume').value;
@@ -363,8 +400,8 @@
     let isReviewMode = false;
 
     let selectedRow = null; let selectedCol = null;
-    const TURN_LIMIT = 60; let timeLeft = TURN_LIMIT; let timerInterval = null;
-
+    let TURN_LIMIT = 60; let timeLeft = TURN_LIMIT; let timerInterval = null; // 💡 const를 let으로 변경!
+    
     const boardEl = document.getElementById('sudokuBoard');
     for (let r = 0; r < 9; r++) {
         for (let c = 0; c < 9; c++) {
@@ -395,7 +432,7 @@
         socket.emit('createRoom', { nickname: getNickname(), isPrivate: isPrivate });
         closeCreateRoomModal();
     }
-    
+
     function joinRoom() {
         const rc = document.getElementById('roomCodeInput').value.trim();
         if(rc.length === 4) socket.emit('joinRoom', { roomCode: rc, nickname: getNickname() });
@@ -417,6 +454,10 @@
         } else {
             document.getElementById('guestControls').style.display = 'block';
         }
+        // 방에 처음 들어갈 때 가림막 상태 초기화
+        isRoomCodeHidden = false;
+        document.getElementById('toggleCodeBtn').innerText = "👀 숨기기";
+        document.getElementById('toggleCodeBtn').style.backgroundColor = "#546e7a";
     });
 
     // 방장 위임 관련 통보 수신
@@ -477,6 +518,16 @@
                     btn.style.backgroundColor = "#0288d1"; btn.style.borderColor = "#01579b";
                 }
             }
+
+            // 서버에서 받아온 시간 설정 화면에 적용
+        const tLimit = room.turnLimit || 60;
+        const limitText = tLimit === 9999 ? "무제한" : `${tLimit}초`;
+        if (isMyHost) document.getElementById('waitTurnLimitInfo').innerText = `⏳ 제한 시간: ${limitText}`;
+
+    // 내가 방장이면 내 화면의 드롭다운 선택도 동기화
+        if (isMyHost) {
+        document.getElementById('timeLimitSelect').value = tLimit;
+        }
         });
 
         if (isMyHost) {
@@ -587,6 +638,7 @@
             playSound(sndBell);
             openNumpadModal(true);
         }
+        TURN_LIMIT = data.turnLimit || 60;
     });
 
     // 💡 [교체] moveApproved 전체 로직에서 play()를 playSound()로 변경합니다.
