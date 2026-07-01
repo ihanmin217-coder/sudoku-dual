@@ -75,8 +75,9 @@
         .emoticon-btn { font-size: 30px; cursor: pointer; background: white; border: 2px solid #ccc; border-radius: 8px; padding: 5px 10px; transition: transform 0.1s; flex-grow: 1; }
         .emoticon-btn:hover { background: #e3f2fd; transform: scale(1.1); }
         .emoticon-btn:active { transform: scale(0.9); }
-        .emoticon-text { font-size: 20px; width: 100%; }
-        
+        /* 💡 [추가/교체] 말 이모티콘 버튼이 한 줄을 예쁘게 차지하도록 고정하는 스타일 */
+        .emoticon-text { font-size: 20px; width: 100% !important; flex-basis: 100%; padding: 8px 5px; }
+
         .toast-popup { position: fixed; top: 25%; left: 50%; transform: translate(-50%, -50%); background: rgba(0, 0, 0, 0.85); color: white; padding: 15px 35px; border-radius: 30px; font-size: 35px; z-index: 1000; opacity: 0; transition: opacity 0.3s ease-in-out; pointer-events: none; text-align: center; }
 
         /* 💡 [신규] 왼쪽 위 오디오 컨트롤 UI */
@@ -237,16 +238,22 @@
         </div>
     </div>
 
+    <button onclick="surrenderGame()" style="position: absolute; bottom: 15px; left: 15px; font-size: 24px; background: #e74c3c; color: white; border: 3px solid #333; border-radius: 8px; padding: 10px 18px; cursor: pointer; z-index: 99; box-shadow: 0 4px 6px rgba(0,0,0,0.2); font-weight: bold;">🏳️ 기권하기</button>
+
     <button onclick="toggleEmoticonPanel()" style="position: absolute; bottom: 15px; right: 15px; font-size: 35px; background: #fcf8eb; border: 3px solid #333; border-radius: 50%; width: 60px; height: 60px; cursor: pointer; z-index: 99; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">💬</button>
     
-    <div class="emoticon-panel" id="emoticonPanel">
+    <div class="emoticon-panel" id="emoticonPanel" style="bottom: 85px; right: 15px;">
         <button class="emoticon-btn" onclick="sendEmoticon('🤔')">🤔</button>
         <button class="emoticon-btn" onclick="sendEmoticon('👏')">👏</button>
         <button class="emoticon-btn" onclick="sendEmoticon('😭')">😭</button>
         <button class="emoticon-btn" onclick="sendEmoticon('😡')">😡</button>
-        <button class="emoticon-btn emoticon-text" onclick="sendEmoticon('앗, 실수!')">앗, 실수!</button>
-        <button class="emoticon-btn emoticon-text" onclick="sendEmoticon('나이스!')">나이스!</button>
-        <button class="emoticon-btn emoticon-text" onclick="sendEmoticon('빨리 해줘요~')">빨리 해줘요~</button>
+        <button class="emoticon-btn" onclick="sendEmoticon('😎')">😎</button>
+        <button class="emoticon-btn" onclick="sendEmoticon('😱')">😱</button>
+        
+        <button class="btn-emoticon-text emoticon-btn emoticon-text" onclick="sendEmoticon('앗, 실수!')">앗, 실수!</button>
+        <button class="btn-emoticon-text emoticon-btn emoticon-text" onclick="sendEmoticon('나이스!')">나이스!</button>
+        <button class="btn-emoticon-text emoticon-btn emoticon-text" onclick="sendEmoticon('빨리 해줘요~')">빨리 해줘요~</button>
+        <button class="btn-emoticon-text emoticon-btn emoticon-text" onclick="sendEmoticon('한 수 배웠습니다!')">한 수 배웠습니다!</button>
     </div>
 
     <div id="emoticonToast" class="toast-popup"></div>
