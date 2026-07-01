@@ -332,4 +332,14 @@ export class GameGateway implements OnGatewayDisconnect {
     this.broadcastRoomState(autoRoomCode);
     this.broadcastRoomList();
   }
+
+  // 💡 [신규] 플레이어가 채팅 메시지를 보냈을 때 처리하는 함수
+  @SubscribeMessage('sendChatMessage')
+  handleSendChatMessage(@MessageBody() data: { roomCode: string; message: string; nickname: string }) {
+    // 해당 방에 있는 모든 유저에게 채팅 데이터를 실시간 브로드캐스팅합니다.
+    this.server.to(data.roomCode).emit('receiveChatMessage', {
+      nickname: data.nickname,
+      message: data.message
+    });
+  }
 }
