@@ -105,6 +105,7 @@ export class GameGateway implements OnGatewayDisconnect {
 
   // 💡 [교체] 방 개설 시 비밀방(isPrivate) 옵션을 받아 저장합니다.
   // 💡 [수정] 방 생성 시 turnLimit(제한 시간) 속성을 추가로 저장합니다.
+  // 💡 [수정] 방 생성 시 turnPref(선공 설정) 속성을 추가로 저장합니다.
   @SubscribeMessage('createRoom')
   handleCreateRoom(@MessageBody() data: { nickname: string, isPrivate: boolean }, @ConnectedSocket() client: Socket) {
     const roomCode = Math.floor(1000 + Math.random() * 9000).toString();
@@ -113,7 +114,8 @@ export class GameGateway implements OnGatewayDisconnect {
       guests: [],
       selectedGuestId: null,
       isPrivate: data.isPrivate,
-      turnLimit: 60 // 💡 [신규] 기본 제한 시간 60초
+      turnLimit: 60,
+      turnPref: 'RANDOM' // 💡 [신규] 기본 선공 설정은 랜덤으로 세팅
     };
     client.join(roomCode);
     client.emit('roomJoined', { roomCode, isHost: true, myId: client.id });
@@ -286,5 +288,56 @@ export class GameGateway implements OnGatewayDisconnect {
       room.turnLimit = data.timeLimit;
       this.broadcastRoomState(data.roomCode); // 변경된 시간을 대기실 모두에게 방송
     }
+  }
+
+  @SubscribeMessage('updateTurnPreference')
+  handleUpdateTurnPreference(@MessageBody() data: { roomCode: string; turnPref: string }, @ConnectedSocket() client: Socket) {
+    const room = this.matchingRooms[data.roomCode];
+    if (room && room.creator.id === client.id) {
+      room.turnPref = data.turnPref;
+      this.broadcastRoomState(data.roomCode); // 💡 대기실 모두에게 즉시 방송
+    }
+  }
+
+  // 💡 [신규] 유저가 '빠른 시작'을 눌렀을 때 빈 방을 찾아 자동으로 배정해 주는 알고리즘
+  @SubscribeMessage('requestQuickMatch')
+  handleQuickMatch(@MessageBody() data: { nickname: string }, @ConnectedSocket() client: Socket) {
+    // 1. 현재 개설된 방들 중 '공개방'이면서 '자리가 남아있는 대기실(인원 2명 미만)'이 있는지 탐색합니다.
+    for (const roomCode in this.matchingRooms) {
+      const room = this.matchingRooms[roomCode];
+      const gameRoom = this.gameService.getRoom(roomCode);
+      const isGameActive = gameRoom && !gameRoom.isGameOver;
+
+      // 공개방이고, 게임 시작 전이며, 게스트 자리가 완전히 비어있다면 (즉, 방장 혼자 있는 방)
+      if (!room.isPrivate && !isGameActive && room.guests.length === 0) {
+        // 찾아낸 최적의 방으로 유저를 즉시 자동 입장시킵니다!
+        room.guests.push({ id: client.id, nickname: data.nickname });
+        room.selectedGuestId = client.id; // 대결 상대로 매칭
+
+        client.join(roomCode);
+        client.emit('roomJoined', { roomCode, isHost: false, myId: client.id });
+        
+        this.broadcastRoomState(roomCode);
+        this.broadcastRoomList();
+        return; // 매칭에 성공했으므로 함수를 종료합니다.
+      }
+    }
+
+    // 2. 만약 현재 들어갈 수 있는 빈 공개방이 단 하나도 없다면? 
+    // 유저가 실망하지 않도록, 스스로 방장이 되어 자동으로 새로운 '공개방'을 파서 대기하게 만듭니다!
+    const autoRoomCode = Math.floor(1000 + Math.random() * 9000).toString();
+    this.matchingRooms[autoRoomCode] = {
+      creator: { id: client.id, nickname: data.nickname },
+      guests: [],
+      selectedGuestId: null,
+      isPrivate: false, // 빠른 시작으로 파진 방은 무조건 공개방
+      turnLimit: 60,
+      turnPref: 'RANDOM'
+    };
+    client.join(autoRoomCode);
+    client.emit('roomJoined', { roomCode: autoRoomCode, isHost: true, myId: client.id });
+    
+    this.broadcastRoomState(autoRoomCode);
+    this.broadcastRoomList();
   }
 }

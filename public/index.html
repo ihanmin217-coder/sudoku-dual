@@ -126,6 +126,8 @@
         <input type="text" id="nicknameInput" class="input-box" placeholder="닉네임 입력 (예: 관전자1)" maxlength="8">
         
         <button class="btn-main" onclick="createRoom()">방 만들기</button>
+
+        <button class="btn-main" style="background-color: #e67e22; border-color: #d35400;" onclick="quickMatch()">⚡ 빠른 시작 (자동 매칭)</button>
     
         <div style="margin-top: 25px; border-top: 2px dashed #ccc; padding-top: 20px;">
             <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 5px;">
@@ -160,9 +162,10 @@
     </div>
     
     <div style="text-align: left; margin-bottom: 20px; font-size: 26px;">
-        <div id="waitHostName" style="margin-bottom: 5px; font-weight: bold;">방장: -</div>
-        <div id="waitTurnLimitInfo" style="margin-bottom: 10px; color: #e67e22; font-weight: bold;">⏳ 제한 시간: 60초</div>
-        
+        <div id="waitHostName" style="margin-bottom: 5px; font-weight: bold; color: #333;">방장: -</div>
+        <div id="waitTurnLimitInfo" style="margin-bottom: 5px; color: #e67e22; font-weight: bold;">⏳ 제한 시간: 60초</div>
+        <div id="waitTurnPrefInfo" style="color: #2980b9; font-weight: bold;">⚔️ 선공 설정: 랜덤 생성</div>
+
         <div style="border-bottom: 2px solid #ccc; padding-bottom: 5px;">참가자 목록</div>
         <div id="guestListContainer" style="margin-top: 10px; max-height: 250px; overflow-y: auto;"></div>
     </div>
@@ -178,9 +181,9 @@
 
         <div style="font-size: 24px; text-align: left; margin-bottom: 10px;">대결 턴 설정 (방장 기준)</div>
         <div class="turn-select">
-            <label><input type="radio" name="turnPref" value="P1"> 선공</label>
-            <label><input type="radio" name="turnPref" value="P2"> 후공</label>
-            <label><input type="radio" name="turnPref" value="RANDOM" checked> 랜덤</label>
+            <label><input type="radio" name="turnPref" value="P1" onchange="changeTurnPreference()"> 방장 선공(1P)</label>
+            <label><input type="radio" name="turnPref" value="P2" onchange="changeTurnPreference()"> 대결상대 선공(2P)</label>
+            <label><input type="radio" name="turnPref" value="RANDOM" checked onchange="changeTurnPreference()"> 랜덤</label>
         </div>
         <button class="btn-main" id="startGameBtn" onclick="requestStartGame()" disabled>상대방 선택 대기 중...</button>
     </div>
@@ -401,7 +404,7 @@
 
     let selectedRow = null; let selectedCol = null;
     let TURN_LIMIT = 60; let timeLeft = TURN_LIMIT; let timerInterval = null; // 💡 const를 let으로 변경!
-    
+
     const boardEl = document.getElementById('sudokuBoard');
     for (let r = 0; r < 9; r++) {
         for (let c = 0; c < 9; c++) {
@@ -539,6 +542,25 @@
             } else {
                 startBtn.disabled = false; startBtn.innerText = "⚔️ 게임 시작하기";
             }
+        }
+        const tLimit = room.turnLimit || 60;
+        const limitText = tLimit === 9999 ? "무제한" : `${tLimit}초`;
+        document.getElementById('waitTurnLimitInfo').innerText = `⏳ 제한 시간: ${limitText}`;
+        
+        // 💡 [선공 정보 표시 보완] 서버가 보내준 세팅을 파싱하여 화면에 한글로 띄워줍니다.
+        const pref = room.turnPref || 'RANDOM';
+        let prefText = "랜덤 결정";
+        if (pref === 'P1') prefText = "방장(1P) 선공";
+        if (pref === 'P2') prefText = "대결상대(2P) 선공";
+        document.getElementById('waitTurnPrefInfo').innerText = `⚔️ 선공 설정: ${prefText}`;
+
+        // 내가 방장일 때만 세팅 컨트롤 폼 박스를 갱신해 줍니다.
+        if (isMyHost) {
+            document.getElementById('timeLimitSelect').value = tLimit;
+            
+            // 내 화면의 라디오 버튼 체크 상태도 동기화
+            const radioBtn = document.querySelector(`input[name="turnPref"][value="${pref}"]`);
+            if (radioBtn) radioBtn.checked = true;
         }
     });
 
@@ -1003,6 +1025,17 @@
     window.onload = () => {
         refreshRoomList();
     };
+
+    function changeTurnPreference() {
+        const selectedPref = document.querySelector('input[name="turnPref"]:checked').value;
+        socket.emit('updateTurnPreference', { roomCode: currentRoomCode, turnPref: selectedPref });
+    }
+
+    // 💡 [신규] 빠른 시작 버튼 클릭 시 작동하는 함수
+    function quickMatch() {
+        // 닉네임 유효성 검사 후 서버에 빠른 매칭 요청
+        socket.emit('requestQuickMatch', { nickname: getNickname() });
+    }
 </script>
 </body>
 </html>
