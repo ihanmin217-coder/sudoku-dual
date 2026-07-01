@@ -195,21 +195,13 @@ export class GameGateway implements OnGatewayDisconnect {
   }
 
   // 💡 [신규] 이모티콘 채팅 기능
+  // 💡 [교체/확인] 이모티콘 및 텍스트 매크로 방송 함수
   @SubscribeMessage('sendEmoticon')
-  handleSendEmoticon(@MessageBody() data: { roomCode: string; emoticon: string }, @ConnectedSocket() client: Socket) {
-    const room = this.matchingRooms[data.roomCode];
-    if (!room) return;
-    
-    // 누가 보냈는지 닉네임 찾기
-    let senderName = "관전자";
-    if (room.creator.id === client.id) senderName = room.creator.nickname;
-    else {
-      const guest = room.guests.find((g: any) => g.id === client.id);
-      if (guest) senderName = guest.nickname;
-    }
-    
-    // 방 전체에 이모티콘 방송
-    this.server.to(data.roomCode).emit('receiveEmoticon', { senderName, emoticon: data.emoticon });
+  handleSendEmoticon(@MessageBody() data: { roomCode: string; emoticon: string; nickname: string }) {
+    this.server.to(data.roomCode).emit('receiveEmoticon', {
+      nickname: data.nickname,
+      emoticon: data.emoticon
+    });
   }
 
   // 💡 [교체] 방장이 '게임 시작'을 눌렀을 때 작동하는 함수 전체 교체

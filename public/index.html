@@ -70,15 +70,14 @@
         .btn-action { border: none; padding: 12px 24px; font-size: 26px; border-radius: 6px; cursor: pointer; margin: 5px; }
 
         /* 💡 [교체] 이모티콘 패널 왼쪽 아래로 이동 */
-        .chat-toggle-btn { position: fixed; bottom: 20px; left: 20px; background-color: #f39c12; color: white; border: none; border-radius: 50px; padding: 15px 25px; font-size: 24px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); z-index: 101; transition: transform 0.2s; }
-        .chat-toggle-btn:hover { transform: scale(1.05); }
+        /* 💡 [교체] 이모티콘 패널 및 토스트 알림창 스타일 업그레이드 */
+        .emoticon-panel { position: absolute; bottom: 70px; right: 20px; background: rgba(255, 255, 255, 0.95); border: 3px solid #333; border-radius: 10px; padding: 15px; display: none; flex-wrap: wrap; gap: 10px; width: 220px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); z-index: 100; }
+        .emoticon-btn { font-size: 30px; cursor: pointer; background: white; border: 2px solid #ccc; border-radius: 8px; padding: 5px 10px; transition: transform 0.1s; flex-grow: 1; }
+        .emoticon-btn:hover { background: #e3f2fd; transform: scale(1.1); }
+        .emoticon-btn:active { transform: scale(0.9); }
+        .emoticon-text { font-size: 20px; width: 100%; }
         
-        .emoticon-panel { position: fixed; bottom: 80px; left: 20px; background: rgba(255,255,255,0.95); padding: 10px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); border: 2px solid #ccc; display: none; z-index: 100; text-align: center; }
-        .emoticon-panel button { font-size: 32px; background: none; border: none; cursor: pointer; transition: transform 0.1s; margin: 0 5px; }
-        .emoticon-panel button:hover { transform: scale(1.2); }
-        
-        /* 알림창은 채팅버튼 위에 뜨도록 조정 */
-        .toast-popup { position: fixed; bottom: 150px; left: 20px; background: rgba(0,0,0,0.85); color: white; padding: 15px 30px; border-radius: 30px; font-size: 28px; display: none; z-index: 200; transition: opacity 0.3s; pointer-events: none; }
+        .toast-popup { position: fixed; top: 25%; left: 50%; transform: translate(-50%, -50%); background: rgba(0, 0, 0, 0.85); color: white; padding: 15px 35px; border-radius: 30px; font-size: 35px; z-index: 1000; opacity: 0; transition: opacity 0.3s ease-in-out; pointer-events: none; text-align: center; }
 
         /* 💡 [신규] 왼쪽 위 오디오 컨트롤 UI */
         .audio-control-btn { position: fixed; top: 20px; left: 20px; background-color: #34495e; color: white; border: none; border-radius: 50px; padding: 10px 20px; font-size: 20px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); z-index: 101; transition: transform 0.2s; }
@@ -237,21 +236,20 @@
             <button class="btn-action" style="background: #f39c12; color: white;" onclick="backToMainLobby()">메인 로비로</button>
         </div>
     </div>
-</div>
 
-<button class="chat-toggle-btn" onclick="toggleEmoticonPanel()">💬 이모티콘</button>
+    <button onclick="toggleEmoticonPanel()" style="position: absolute; bottom: 15px; right: 15px; font-size: 35px; background: #fcf8eb; border: 3px solid #333; border-radius: 50%; width: 60px; height: 60px; cursor: pointer; z-index: 99; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">💬</button>
+    
+    <div class="emoticon-panel" id="emoticonPanel">
+        <button class="emoticon-btn" onclick="sendEmoticon('🤔')">🤔</button>
+        <button class="emoticon-btn" onclick="sendEmoticon('👏')">👏</button>
+        <button class="emoticon-btn" onclick="sendEmoticon('😭')">😭</button>
+        <button class="emoticon-btn" onclick="sendEmoticon('😡')">😡</button>
+        <button class="emoticon-btn emoticon-text" onclick="sendEmoticon('앗, 실수!')">앗, 실수!</button>
+        <button class="emoticon-btn emoticon-text" onclick="sendEmoticon('나이스!')">나이스!</button>
+        <button class="emoticon-btn emoticon-text" onclick="sendEmoticon('빨리 해줘요~')">빨리 해줘요~</button>
+    </div>
 
-<div class="emoticon-panel" id="emoticonPanel">
-    <div style="font-size: 16px; margin-bottom: 5px; font-weight: bold; color: #333;">감정표현</div>
-    <button onclick="sendEmoticon('👍')">👍</button>
-    <button onclick="sendEmoticon('👏')">👏</button>
-    <button onclick="sendEmoticon('😮')">😮</button>
-    <button onclick="sendEmoticon('🤔')">🤔</button>
-    <button onclick="sendEmoticon('😭')">😭</button>
-</div>
-
-<div class="toast-popup" id="emoticonToast">
-    <span id="emoticonSender" style="color: #f1c40f; font-weight: bold;"></span>: <span id="emoticonValue" style="font-size: 36px; vertical-align: middle;"></span>
+    <div id="emoticonToast" class="toast-popup"></div>
 </div>
 
 <div class="modal-overlay" id="creditsModal" onclick="closeCreditsModal()">
@@ -401,6 +399,9 @@
     let gameHistory = [];
     let currentReplayStep = 0;
     let isReviewMode = false;
+
+    let isEmoticonPanelOpen = false;
+    let emoticonTimer = null;
 
     let selectedRow = null; let selectedCol = null;
     let TURN_LIMIT = 60; let timeLeft = TURN_LIMIT; let timerInterval = null; // 💡 const를 let으로 변경!
@@ -567,14 +568,14 @@
     // 이모티콘 전송 및 수신
     let emoticonTimeout;
     function sendEmoticon(emo) {
-        if(!currentRoomCode) return;
-        socket.emit('sendEmoticon', { roomCode: currentRoomCode, emoticon: emo });
-        document.getElementById('emoticonPanel').style.display = 'none'; // 전송 후 패널 자동 닫기
+        const myNickname = document.getElementById('nicknameInput').value || "익명";
+        socket.emit('sendEmoticon', { roomCode: currentRoomCode, emoticon: emo, nickname: myNickname });
+        toggleEmoticonPanel(); 
     }
 
     function toggleEmoticonPanel() {
-        const panel = document.getElementById('emoticonPanel');
-        panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+        isEmoticonPanelOpen = !isEmoticonPanelOpen;
+        document.getElementById('emoticonPanel').style.display = isEmoticonPanelOpen ? 'flex' : 'none';
     }
 
     function backToGameOver() {
@@ -586,17 +587,16 @@
     
     socket.on('receiveEmoticon', (data) => {
         const toast = document.getElementById('emoticonToast');
-        document.getElementById('emoticonSender').innerText = data.senderName;
-        document.getElementById('emoticonValue').innerText = data.emoticon;
         
-        toast.style.display = 'block';
+        toast.innerText = `${data.nickname} : ${data.emoticon}`;
         toast.style.opacity = '1';
-
-        clearTimeout(emoticonTimeout);
-        emoticonTimeout = setTimeout(() => {
+        
+        // 💡 타이머 초기화 (다다닥 연속으로 눌러도 가장 마지막 기준으로 2.5초 유지)
+        if (emoticonTimer) clearTimeout(emoticonTimer);
+        
+        emoticonTimer = setTimeout(() => {
             toast.style.opacity = '0';
-            setTimeout(() => toast.style.display = 'none', 300);
-        }, 2000);
+        }, 2500);
     });
 
     function toggleReady() { socket.emit('toggleReady', currentRoomCode); }
