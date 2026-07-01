@@ -19,16 +19,15 @@ export class GameGateway implements OnGatewayDisconnect {
   private matchingRooms: Record<string, any> = {};
 
   // 💡 [신규 1] 전체 유저에게 현재 입장 가능한 방 목록을 뿌려주는 함수
+  // 💡 [교체] 게시판 방송 시, '비밀방'은 리스트에서 몰래 빼고 보냅니다.
   private broadcastRoomList() {
-    // 💡 [핵심 해결] TypeScript가 안심할 수 있도록 ': any[]' 라는 명찰을 달아줍니다!
     const roomList: any[] = []; 
-    
     for (const roomCode in this.matchingRooms) {
       const room = this.matchingRooms[roomCode];
       const gameRoom = this.gameService.getRoom(roomCode);
       
-      if (!gameRoom || gameRoom.isGameOver) {
-        // 💡 주의: 그냥 push가 아니라 꼭 roomList.push 라고 적어야 합니다!
+      // 방이 비밀방(!room.isPrivate)이 아니면서, 게임 대기 중인 방만 목록에 추가
+      if (!room.isPrivate && (!gameRoom || gameRoom.isGameOver)) {
         roomList.push({
           roomCode,
           hostName: room.creator.nickname,
@@ -51,25 +50,20 @@ export class GameGateway implements OnGatewayDisconnect {
     if (room) this.server.to(roomCode).emit('roomStateUpdated', { roomCode, ...room });
   }
 
-  // 💡 [교체] 방장 및 참가자 탈주 시 승계 및 자동 매칭을 지원하도록 업그레이드된 함수
+  // 💡 [교체] 방장 및 참가자 탈주 시 승계 처리와 더불어 '로비 게시판 즉시 갱신'을 보장합니다.
   handleDisconnect(client: Socket) {
+    let listChanged = false; // 게시판을 갱신해야 하는지 체크하는 스위치
+
     for (const roomCode in this.matchingRooms) {
       const room = this.matchingRooms[roomCode];
-      
       const gameRoom = this.gameService.getRoom(roomCode);
       const isGameActive = gameRoom && !gameRoom.isGameOver;
 
       if (room.creator.id === client.id) {
-        // 💡 [기능 2] 방장(1P)이 나갔을 때
         if (room.guests.length > 0) {
-          // 남은 게스트 중 첫 번째 사람(2P)을 새로운 방장으로 승격
           const newHost = room.guests.shift();
           room.creator = newHost;
-          
-          // 그 다음 대기자(3P)를 대결 상대로 자동 지정
           room.selectedGuestId = room.guests.length > 0 ? room.guests[0].id : null;
-
-          // 새로운 방장에게 권한 위임 알림
           this.server.to(newHost.id).emit('hostTransferred');
 
           if (isGameActive) {
@@ -77,42 +71,47 @@ export class GameGateway implements OnGatewayDisconnect {
             this.server.to(roomCode).emit('opponentDisconnected');
           }
           this.broadcastRoomState(roomCode);
+          listChanged = true;
         } else {
-          // 방에 아무도 남지 않게 되면 방 폭파
           if (isGameActive) this.server.to(roomCode).emit('opponentDisconnected');
           else this.server.to(roomCode).emit('roomDestroyed');
           delete this.matchingRooms[roomCode];
+          listChanged = true;
         }
       } else {
-        // 💡 [기능 3] 게스트(2P, 3P 등)가 나갔을 때
         const guestIndex = room.guests.findIndex((g: any) => g.id === client.id);
         if (guestIndex !== -1) {
           const isOpponent = room.selectedGuestId === client.id;
           room.guests.splice(guestIndex, 1);
           
           if (isOpponent) {
-            // 대결 상대(2P)가 나갔으면, 남아있는 첫 번째 관전자(3P)를 대결 상대로 자동 지정
             room.selectedGuestId = room.guests.length > 0 ? room.guests[0].id : null;
-
             if (isGameActive) {
               gameRoom.isGameOver = true;
               this.server.to(roomCode).emit('opponentDisconnected');
             }
           }
           this.broadcastRoomState(roomCode);
+          listChanged = true;
         }
       }
     }
-    this.broadcastRoomList();
+
+    // 💡 [핵심 버그 픽스] 누군가 나가서 방 상태가 변했다면, 로비에 있는 모두의 게시판을 즉시 갱신합니다!
+    if (listChanged) {
+      this.broadcastRoomList();
+    }
   }
 
+  // 💡 [교체] 방 개설 시 비밀방(isPrivate) 옵션을 받아 저장합니다.
   @SubscribeMessage('createRoom')
-  handleCreateRoom(@MessageBody() data: { nickname: string }, @ConnectedSocket() client: Socket) {
+  handleCreateRoom(@MessageBody() data: { nickname: string, isPrivate: boolean }, @ConnectedSocket() client: Socket) {
     const roomCode = Math.floor(1000 + Math.random() * 9000).toString();
     this.matchingRooms[roomCode] = {
       creator: { id: client.id, nickname: data.nickname },
       guests: [],
       selectedGuestId: null,
+      isPrivate: data.isPrivate // 비밀방 여부 저장
     };
     client.join(roomCode);
     client.emit('roomJoined', { roomCode, isHost: true, myId: client.id });
