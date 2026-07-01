@@ -97,6 +97,15 @@
         .jump-input { width: 55px; text-align: center; font-size: 22px; padding: 5px; border-radius: 5px; border: 2px solid #546e7a; font-family: 'Nanum Pen Script', cursive; }
         .btn-jump { background-color: #f39c12; color: white; border: none; padding: 6px 12px; font-size: 22px; border-radius: 5px; cursor: pointer; transition: transform 0.1s; }
         .btn-jump:active { transform: scale(0.95); }
+
+        /* 💡 [신규] 방 목록 게시판 스타일 */
+        .room-list-container { border: 2px solid #333; border-radius: 8px; background: white; margin-top: 15px; height: 200px; overflow-y: auto; text-align: left; box-shadow: inset 0 2px 5px rgba(0,0,0,0.1); }
+        .room-item { padding: 12px 15px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; font-size: 24px; transition: background 0.2s; }
+        .room-item:hover { background: #e3f2fd; }
+        .room-item:last-child { border-bottom: none; }
+        .empty-room { padding: 20px; text-align: center; color: #777; font-size: 22px; margin-top: 40px; }
+        .btn-join { background: #2e7d32; color: white; border: none; padding: 6px 15px; font-size: 22px; border-radius: 5px; cursor: pointer; transition: transform 0.1s; }
+        .btn-join:active { transform: scale(0.95); }
     </style>
 </head>
 <body>
@@ -112,13 +121,27 @@
         </label>
     </div>
 
-<div class="panel-screen" id="lobbyScreen">
-    <div class="title-text">스도쿠 듀얼</div>
-    <input type="text" id="nicknameInput" class="input-box" placeholder="닉네임 입력 (예: 관전자1)" maxlength="8">
-    <div style="margin-top: 25px; border-top: 2px dashed #ccc; padding-top: 25px;">
+    <div class="panel-screen" id="lobbyScreen">
+        <div class="title-text">스도쿠 듀얼</div>
+        <input type="text" id="nicknameInput" class="input-box" placeholder="닉네임 입력 (예: 관전자1)" maxlength="8">
+        
         <button class="btn-main" onclick="createRoom()">방 만들기</button>
-        <input type="text" id="roomCodeInput" class="input-box" placeholder="4자리 방 코드 입력" maxlength="4" style="margin-top: 15px;">
-        <button class="btn-main btn-sub" onclick="joinRoom()">방 참가하기</button>
+    
+        <div style="margin-top: 25px; border-top: 2px dashed #ccc; padding-top: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 5px;">
+                <div style="font-size: 28px; font-weight: bold; color: #333;">📡 실시간 방 목록</div>
+                <button class="btn-small" style="background-color: #f39c12; color: white;" onclick="refreshRoomList()">🔄 새로고침</button>
+            </div>
+            
+            <div class="room-list-container" id="roomListBoard">
+                <div class="empty-room">방 목록을 불러오는 중...</div>
+            </div>
+            
+            <div style="display: flex; margin-top: 15px; gap: 10px;">
+                <input type="text" id="roomCodeInput" class="input-box" placeholder="코드 직접 입력" maxlength="4" style="margin-bottom: 0; flex: 1;">
+                <button class="btn-main btn-sub" style="margin-bottom: 0; width: auto; padding: 10px 20px;" onclick="joinRoom()">참가</button>
+            </div>
+        </div>
         <div style="margin-top: 25px; border-top: 2px dashed #ccc; padding-top: 25px;">
             <div class="lobby-label">게임 정보</div>
             <button class="btn-main" style="background-color: #8e44ad; border-color: #732d91;" onclick="window.open('https://docs.google.com/document/d/13betuRp_yTCIeED3E6ux-5_dpCgTUaRrvkghC-uaYCU/edit?usp=drive_link', '_blank')">📜 스도쿠 듀얼 룰 보기</button>
@@ -853,6 +876,46 @@
         currentReplayStep = inputVal;
         renderReplayBoard();
     }
+    // 💡 [신규] 서버에 방 목록 요청 및 갱신 함수
+    function refreshRoomList() {
+        socket.emit('requestRoomList');
+    }
+
+    // 서버로부터 방 목록 데이터를 받았을 때 화면에 그리기
+    socket.on('roomListUpdated', (rooms) => {
+        const board = document.getElementById('roomListBoard');
+        board.innerHTML = ''; // 기존 목록 초기화
+
+        if (rooms.length === 0) {
+            board.innerHTML = '<div class="empty-room">현재 참여 가능한 방이 없습니다.<br>직접 방을 만들어보세요!</div>';
+            return;
+        }
+
+        rooms.forEach(room => {
+            const div = document.createElement('div');
+            div.className = 'room-item';
+            div.innerHTML = `
+                <div>
+                    <span style="font-weight:bold; color:#d32f2f;">[${room.roomCode}]</span> 
+                    ${room.hostName}님의 방 
+                    <span style="font-size: 20px; color: #555;">(👤 ${room.playerCount}명)</span>
+                </div>
+                <button class="btn-join" onclick="joinRoomDirectly('${room.roomCode}')">입장</button>
+            `;
+            board.appendChild(div);
+        });
+    });
+
+    // 목록에서 '입장' 버튼 클릭 시 코드를 자동 입력하고 참가
+    function joinRoomDirectly(code) {
+        document.getElementById('roomCodeInput').value = code;
+        joinRoom();
+    }
+
+    // 💡 브라우저가 처음 로딩될 때 방 목록 1회 새로고침 실행
+    window.onload = () => {
+        refreshRoomList();
+    };
 </script>
 </body>
 </html>

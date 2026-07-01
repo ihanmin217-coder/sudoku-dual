@@ -18,6 +18,33 @@ export class GameGateway implements OnGatewayDisconnect {
 
   private matchingRooms: Record<string, any> = {};
 
+  // 💡 [신규 1] 전체 유저에게 현재 입장 가능한 방 목록을 뿌려주는 함수
+  private broadcastRoomList() {
+    // 💡 [핵심 해결] TypeScript가 안심할 수 있도록 ': any[]' 라는 명찰을 달아줍니다!
+    const roomList: any[] = []; 
+    
+    for (const roomCode in this.matchingRooms) {
+      const room = this.matchingRooms[roomCode];
+      const gameRoom = this.gameService.getRoom(roomCode);
+      
+      if (!gameRoom || gameRoom.isGameOver) {
+        // 💡 주의: 그냥 push가 아니라 꼭 roomList.push 라고 적어야 합니다!
+        roomList.push({
+          roomCode,
+          hostName: room.creator.nickname,
+          playerCount: 1 + room.guests.length,
+        });
+      }
+    }
+    this.server.emit('roomListUpdated', roomList); 
+  }
+
+  // 💡 [신규 2] 클라이언트가 처음 로비에 들어왔을 때 방 목록을 요청하는 이벤트
+  @SubscribeMessage('requestRoomList')
+  handleRequestRoomList(@ConnectedSocket() client: Socket) {
+    this.broadcastRoomList();
+  }
+
   private broadcastRoomState(roomCode: string) {
     const room = this.matchingRooms[roomCode];
     // 💡 [버그 픽스] 클라이언트가 방 코드를 헷갈리지 않게 객체에 확실히 담아서 보냅니다.
@@ -76,6 +103,7 @@ export class GameGateway implements OnGatewayDisconnect {
         }
       }
     }
+    this.broadcastRoomList();
   }
 
   @SubscribeMessage('createRoom')
@@ -89,6 +117,7 @@ export class GameGateway implements OnGatewayDisconnect {
     client.join(roomCode);
     client.emit('roomJoined', { roomCode, isHost: true, myId: client.id });
     this.broadcastRoomState(roomCode);
+    this.broadcastRoomList();
   }
 
   @SubscribeMessage('joinRoom')
@@ -104,6 +133,7 @@ export class GameGateway implements OnGatewayDisconnect {
     } else {
       client.emit('joinError', '방이 존재하지 않습니다.');
     }
+    this.broadcastRoomList();
   }
 
   @SubscribeMessage('toggleReady')
@@ -205,6 +235,7 @@ export class GameGateway implements OnGatewayDisconnect {
       players: { 1: gameRoom.players[1].nickname, 2: gameRoom.players[2].nickname },
       roles: { [room.creator.id]: creatorRole, [selectedGuest.id]: guestRole }
     });
+    this.broadcastRoomList();
   }
 
   @SubscribeMessage('playerMove')
