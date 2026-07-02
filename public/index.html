@@ -620,41 +620,54 @@
     // 💡 [교체] 기존 gameStart 수신부를 아래 코드로 통째로 덮어씌웁니다.
     // 💡 [완벽 교체] 중복되어 있던 2개의 gameStart 수신부를 모두 지우고 이 코드 하나만 남기세요!
     // 💡 [교체] 관전자 숨김 처리 및 실시간 복기 시스템을 지원하는 gameStart 수신부
+    // 💡 [신규] 브라우저의 음악 차단을 우회하여 첫 클릭 시 무조건 재생시키는 함수
+    function playBgmSafely() {
+        sndBgm.currentTime = 0;
+        const playPromise = sndBgm.play();
+        
+        if (playPromise !== undefined) {
+            playPromise.catch(err => {
+                document.body.addEventListener('click', function forceBgm() {
+                    sndBgm.play().catch(()=>{});
+                    document.body.removeEventListener('click', forceBgm);
+                }, { once: true });
+            });
+        }
+    }
+
+    // 💡 [교체] 음악 재생 및 서버 데이터 누락 대비 보호막이 추가된 gameStart
     socket.on('gameStart', (data) => {
         isGameStarted = true;
         isGameOver = false;
-        gameHistory = []; // 복기용 기록 초기화
+        gameHistory = []; 
         
-        // 화면 전환
         document.getElementById('waitingRoomScreen').style.display = 'none';
         document.getElementById('gameContainer').style.display = 'block';
 
-        playerNames[1] = data.players[1];
-        playerNames[2] = data.players[2];
-        document.getElementById('p1Info').innerText = `1P (방장): ${playerNames[1]}`;
-        document.getElementById('p2Info').innerText = `2P (상대): ${playerNames[2]}`;
+        if (data && data.players) {
+            playerNames[1] = data.players[1] || '1P';
+            playerNames[2] = data.players[2] || '2P';
+            document.getElementById('p1Info').innerText = `1P (방장): ${playerNames[1]}`;
+            document.getElementById('p2Info').innerText = `2P (상대): ${playerNames[2]}`;
+        }
 
-        myPlayerNumber = data.roles[socket.id] || 0; // 💡 0이면 관전자(3P 이상)입니다!
-        TURN_LIMIT = data.turnLimit || 60;
+        myPlayerNumber = (data && data.roles) ? data.roles[socket.id] || 0 : (myPlayerNumber || 0); 
+        TURN_LIMIT = (data && data.turnLimit) ? data.turnLimit : 60;
 
-        // 💡 [개선 사항 1] 관전자 권한에 따른 인게임 버튼 제어
         if (myPlayerNumber === 0) {
-            // 관전자는 기권하기 버튼을 숨기고, 실시간 복기 패널을 켭니다.
             document.getElementById('inGameSurrenderBtn').style.display = 'none';
             document.getElementById('spectatorReviewControls').style.display = 'block';
-            isSpectatorReviewMode = false; // 기본은 실시간 라이브 시청 상태
+            isSpectatorReviewMode = false; 
             document.getElementById('specReplayStatus').innerText = "🔴 라이브 시청 중";
         } else {
-            // 실제 플레이어는 기권 버튼을 보이고, 복기 패널을 숨깁니다.
             document.getElementById('inGameSurrenderBtn').style.display = 'block';
             document.getElementById('spectatorReviewControls').style.display = 'none';
         }
 
-        sndBgm.play();
+        playBgmSafely(); // 💡 위에서 만든 안전한 음악 재생 함수 호출!
         initBoard();
-        updateUI();
+        updateUI();      // 💡 이제 이 함수가 에러를 뿜지 않으므로 모든 모달이 정상적으로 뜹니다!
     });
-
     // 💡 [교체] moveApproved 전체 로직에서 play()를 playSound()로 변경합니다.
     socket.on('moveApproved', (data) => {
         const move = data.move;
@@ -920,6 +933,7 @@
         }
     });
 
+    // 💡 [버그 픽스] 없는 HTML ID를 찾다가 게임이 멈추는 현상 100% 해결!
     function updateUI() {
         if (isReviewMode) return; 
 
@@ -942,26 +956,31 @@
 
         if (!isGameStarted) return;
 
-        document.getElementById('scoreText').innerText = `${playerNames[1]} [${scores[1]}점] vs ${playerNames[2]} [${scores[2]}점]`;
         const isMyTurn = (currentPlayer === myPlayerNumber);
         
-        if (myPlayerNumber === null) {
-            document.getElementById('turnText').innerText = `👀 관전 중 (현재 턴: ${playerNames[currentPlayer]})`;
-            document.getElementById('surrenderBtn').disabled = true;
+        // 변경된 ID(turnIndicator, inGameSurrenderBtn)로 안전하게 연결합니다.
+        const turnEl = document.getElementById('turnIndicator');
+        const surrenderBtn = document.getElementById('inGameSurrenderBtn');
+
+        if (myPlayerNumber === 0) {
+            if (turnEl) turnEl.innerText = `👀 관전 중 (현재 턴: ${playerNames[currentPlayer]})`;
+            if (surrenderBtn) surrenderBtn.disabled = true;
         } else {
-            document.getElementById('turnText').innerText = isMyTurn ? `🟢 나의 턴 (${playerNames[currentPlayer]})` : `🔴 상대방 대기 중...`;
-            document.getElementById('surrenderBtn').disabled = isGameOver || isOpeningPhase || !isMyTurn;
+            if (turnEl) turnEl.innerText = isMyTurn ? `🟢 나의 턴 (${playerNames[currentPlayer]})` : `🔴 상대방 대기 중...`;
+            if (surrenderBtn) surrenderBtn.disabled = isGameOver || isOpeningPhase || !isMyTurn;
         }
 
         const hintEl = document.getElementById('hintText');
-        if (isOpeningPhase) {
-            hintEl.innerText = myPlayerNumber === 2 ? "⏳ [오프닝] 선공이 쓸 첫 숫자를 골라주세요." : "⏳ 상대방이 첫 숫자를 정하고 있습니다.";
-        } else if (isFirstTurn) {
-            hintEl.innerText = isMyTurn ? `✨ 자유 구역. 원하는 빈칸에 [${openingNumber}] 기입.` : `상대방이 [${openingNumber}]를 배치 중입니다.`;
-        } else if (requiredNextBox !== null) {
-            hintEl.innerText = isMyTurn ? `💥 제약 조건: [${requiredNextBox}번 큰 칸] 내부에 숫자를 놓으세요.` : `상대방이 [${requiredNextBox}번 큰 칸]에 배치 중입니다.`;
-        } else {
-            hintEl.innerText = isMyTurn ? "✨ 프리 턴: 빈칸을 자유롭게 클릭하세요." : "상대방이 프리 턴으로 배치 중입니다.";
+        if (hintEl) {
+            if (isOpeningPhase) {
+                hintEl.innerText = myPlayerNumber === 2 ? "⏳ [오프닝] 선공이 쓸 첫 숫자를 골라주세요." : "⏳ 상대방이 첫 숫자를 정하고 있습니다.";
+            } else if (isFirstTurn) {
+                hintEl.innerText = isMyTurn ? `✨ 자유 구역. 원하는 빈칸에 [${openingNumber}] 기입.` : `상대방이 [${openingNumber}]를 배치 중입니다.`;
+            } else if (requiredNextBox !== null) {
+                hintEl.innerText = isMyTurn ? `💥 제약 조건: [${requiredNextBox}번 큰 칸] 내부에 숫자를 놓으세요.` : `상대방이 [${requiredNextBox}번 큰 칸]에 배치 중입니다.`;
+            } else {
+                hintEl.innerText = isMyTurn ? "✨ 프리 턴: 빈칸을 자유롭게 클릭하세요." : "상대방이 프리 턴으로 배치 중입니다.";
+            }
         }
     }
     // 💡 [신규] 크레딧 모달 열기/닫기 함수
