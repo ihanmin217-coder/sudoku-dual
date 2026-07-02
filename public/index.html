@@ -230,40 +230,28 @@
         <div class="board" id="sudokuBoard"></div>
     </div>
 
-    <div id="spectatorReviewControls" style="display: none; margin-top: 15px; background: #e3f2fd; padding: 10px; border-radius: 8px; border: 2px dashed #1976d2;">
-        <div style="font-size: 22px; font-weight: bold; color: #0d47a1; margin-bottom: 5px; text-align: center;">🔎 실시간 복기 모드 (관전자 전용)</div>
-        <div style="display: flex; justify-content: center; gap: 10px; align-items: center;">
-            <button class="btn-small" style="background: #1976d2; color: white;" onclick="stepSpectatorReplay(-1)">◀ 이전 수</button>
-            <span id="specReplayStatus" style="font-size: 22px; font-weight: bold; color: #333;">라이브 중</span>
-            <button class="btn-small" style="background: #1976d2; color: white;" onclick="stepSpectatorReplay(1)">다음 수 ▶</button>
-            <button class="btn-small" style="background: #2e7d32; color: white;" onclick="returnToLiveSpectate()">🔴 라이브 보기</button>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; width: 100%; max-width: 460px; margin-left: auto; margin-right: auto;">
+        <button id="inGameSurrenderBtn" onclick="surrender()" style="font-size: 20px; background: #e74c3c; color: white; border: 3px solid #333; border-radius: 8px; padding: 8px 15px; cursor: pointer; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">🏳️ 기권하기</button>
+
+        <div style="position: relative;">
+            <button onclick="toggleEmoticonPanel()" style="font-size: 24px; background: #fcf8eb; border: 3px solid #333; border-radius: 50%; width: 50px; height: 50px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">💬</button>
+            
+            <div class="emoticon-panel" id="emoticonPanel" style="position: absolute; bottom: 60px; right: 0; z-index: 102; width: 220px; display: none;">
+                <button class="emoticon-btn" onclick="sendEmoticon('🤔')">🤔</button>
+                <button class="emoticon-btn" onclick="sendEmoticon('👏')">👏</button>
+                <button class="emoticon-btn" onclick="sendEmoticon('😭')">😭</button>
+                <button class="emoticon-btn" onclick="sendEmoticon('😡')">😡</button>
+                <button class="emoticon-btn" onclick="sendEmoticon('😎')">😎</button>
+                <button class="emoticon-btn" onclick="sendEmoticon('😱')">😱</button>
+                <button class="btn-emoticon-text emoticon-btn emoticon-text" onclick="sendEmoticon('앗, 실수!')">앗, 실수!</button>
+                <button class="btn-emoticon-text emoticon-btn emoticon-text" onclick="sendEmoticon('나이스!')">나이스!</button>
+                <button class="btn-emoticon-text emoticon-btn emoticon-text" onclick="sendEmoticon('빨리 해줘요~')">빨리 해줘요~</button>
+                <button class="btn-emoticon-text emoticon-btn emoticon-text" onclick="sendEmoticon('한 수 배웠습니다!')">한 수 배웠습니다!</button>
+            </div>
         </div>
     </div>
 
-    <div class="chat-container" style="margin: 25px auto 0; width: 100%; max-width: 460px;">
-        <div class="chat-messages" id="gameChatMessages" style="height: 100px;"></div>
-        <div class="chat-input-area">
-            <input type="text" id="gameChatInput" class="chat-input" placeholder="실시간 대화 및 훈수 가능..." onkeypress="if(event.keyCode==13) sendRoomChat('game')">
-            <button class="btn-chat-send" onclick="sendRoomChat('game')">전송</button>
-        </div>
-    </div>
-
-    <button id="inGameSurrenderBtn" onclick="surrender()" style="position: absolute; bottom: 15px; left: 15px; font-size: 22px; background: #e74c3c; color: white; border: 3px solid #333; border-radius: 8px; padding: 8px 15px; cursor: pointer; z-index: 101; box-shadow: 0 4px 6px rgba(0,0,0,0.2); font-weight: bold;">🏳️ 기권하기</button>
-
-    <button onclick="toggleEmoticonPanel()" style="position: absolute; bottom: 15px; right: 15px; font-size: 30px; background: #fcf8eb; border: 3px solid #333; border-radius: 50%; width: 55px; height: 55px; cursor: pointer; z-index: 101; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">💬</button>
-    
-    <div class="emoticon-panel" id="emoticonPanel" style="position: absolute; bottom: 80px; right: 15px; z-index: 102;">
-        <button class="emoticon-btn" onclick="sendEmoticon('🤔')">🤔</button>
-        <button class="emoticon-btn" onclick="sendEmoticon('👏')">👏</button>
-        <button class="emoticon-btn" onclick="sendEmoticon('😭')">😭</button>
-        <button class="emoticon-btn" onclick="sendEmoticon('😡')">😡</button>
-        <button class="emoticon-btn" onclick="sendEmoticon('😎')">😎</button>
-        <button class="emoticon-btn" onclick="sendEmoticon('😱')">😱</button>
-        <button class="btn-emoticon-text emoticon-btn emoticon-text" onclick="sendEmoticon('앗, 실수!')">앗, 실수!</button>
-        <button class="btn-emoticon-text emoticon-btn emoticon-text" onclick="sendEmoticon('나이스!')">나이스!</button>
-        <button class="btn-emoticon-text emoticon-btn emoticon-text" onclick="sendEmoticon('빨리 해줘요~')">빨리 해줘요~</button>
-        <button class="btn-emoticon-text emoticon-btn emoticon-text" onclick="sendEmoticon('한 수 배웠습니다!')">한 수 배웠습니다!</button>
-    </div>
+    <div class="chat-container" style="margin: 15px auto 0; width: 100%; max-width: 460px;">...</div>
 </div>
 
 <div class="game-over-screen" id="gameOverScreen" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; justify-content: center; align-items: center; flex-direction: column;">
@@ -302,40 +290,16 @@
     </div>
 </div>
 
-<div class="modal-overlay" id="creditsModal" onclick="closeCreditsModal()">
-    <div class="credits-content" onclick="event.stopPropagation()">
-        <h2>오디오 크레딧</h2>
-        <div id="creditsText">
-            <p>스도쿠 듀얼에 사용된 오디오 에셋 출처입니다.</p>
-            <p>
-                gameover.mp3<br>
-                ✔ SFX provided by 셀바이뮤직<br>
-                🎵 Title : A Tone Sound<br>
-                https://sellbuymusic.com/md/seuiuzc-vfzckzc<br>
-                <br>
-                bell.mp3<br>
-                ✔ SFX provided by 셀바이뮤직<br>
-                🎵 Title : Bell 9<br>
-                https://sellbuymusic.com/md/suenccb-ifzckzc<br>
-                <br>
-                hurry.mp3<br>
-                ✔ SFX provided by 셀바이뮤직<br>
-                🎵 Title : Anxiety 1<br>
-                https://sellbuymusic.com/md/soanxbt-rfzckzc<br>
-                <br>
-                pencil.mp3<br>
-                freesound_community-Pencil Writing on Paper<br>
-                <br>
-                bgm.mp3<br>
-                Gemini-The Weighted Grid
-            </p>
-        </div>
-        <button class="btn-cancel" style="margin-top: 20px; display: block;" onclick="closeCreditsModal()">닫기</button>
-    </div> </div> <div class="modal-overlay" id="numpadModal" onclick="cancelNumpad()">
+<div class="modal-overlay" id="creditsModal" style="display: none;" onclick="closeCreditsModal()">
     <div class="modal-content" onclick="event.stopPropagation()">
-        <div style="font-size: 28px; margin-bottom: 20px;" id="modalTitle">숫자를 선택하세요</div>
-        <div class="numpad" id="numpadGrid"></div>
-        <button style="width: 100%; padding: 12px; font-size: 26px; background: #7f8c8d; color: white; border: none; border-radius: 8px; cursor: pointer;" id="cancelBtn" onclick="cancelNumpad()">🔙 취소</button>
+        <div style="font-size: 32px; margin-bottom: 20px; font-weight: bold;">만든 사람들</div>
+        <div style="font-size: 24px; text-align: left; line-height: 1.5; color: #333;">
+            • 기획 및 개발: leehm0110<br>
+            • 배경음악: Lyria 3-The Weighted Grid<br>
+            • 효과음: 셀바이뮤직, freesound_community<br>
+            • 도움: Google Gemini
+        </div>
+        <button class="btn-main" style="background-color: #7f8c8d; margin-top: 25px;" onclick="closeCreditsModal()">닫기</button>
     </div>
 </div>
 
@@ -824,21 +788,23 @@
     });
 
     // 💡 [교체] 기권/탈주(isSurrendered)인 경우를 처리할 수 있도록 함수를 확장합니다.
+    // 💡 [교체] 에러가 나도 결과창이 무조건 뜨도록 보호막(try-catch)을 씌운 endGame
     function endGame(gameWinner, isSuffocated, isSurrendered) {
         isGameOver = true;
         clearInterval(timerInterval);
         
-        sndBgm.pause();
-        sndBgm.currentTime = 0;
-        playSound(sndGameOver);
+        // 오디오 로딩 에러 때문에 화면이 안 뜨는 현상 방지
+        try {
+            sndBgm.pause();
+            sndBgm.currentTime = 0;
+            playSound(sndGameOver);
+        } catch(e) { console.log("오디오 재생 생략됨"); }
 
         updateUI();
-
         const announce = document.getElementById('winnerAnounce');
         
-        // 💡 [핵심 추가] 상대방이 도망가서 기권승한 경우의 전용 문구를 띄워줍니다.
         if (isSurrendered) {
-            announce.innerHTML = `🏃 상대방이 접속을 종료했습니다!<br>🎉 부전승 획득: ${playerNames[myPlayerNumber]}`;
+            announce.innerHTML = `🏃 상대방이 접속을 종료/기권했습니다!<br>🎉 승리: ${playerNames[myPlayerNumber]}`;
         } else if (isSuffocated) {
             announce.innerHTML = `💀 더 이상 둘 곳이 없습니다 (질식)!<br>🎉 승리: ${playerNames[gameWinner]}`;
         } else {
@@ -915,25 +881,30 @@
         document.getElementById('hintText').innerText = "🔎 [이전/다음] 버튼이나 숫자를 입력해 복기하세요.";
     } // <-- renderReplayBoard 함수 끝
 
+    // 💡 [교체] 타이머가 0이 되면 자동으로 기권(타임아웃 패배) 처리되도록 보완
     function startTimer() {
         clearInterval(timerInterval);
+        if (TURN_LIMIT === 9999) {
+            document.getElementById('timerBar').style.width = '100%';
+            return; // 무제한 모드면 여기서 멈춤
+        }
+        
         timeLeft = TURN_LIMIT;
-        isHurryPlayed = false; // 💡 턴마다 경고음 리셋
         document.getElementById('timerBar').style.width = '100%';
         
         timerInterval = setInterval(() => {
-            if (isGameOver || isReviewMode) { clearInterval(timerInterval); return; }
-            timeLeft -= 0.1;
-            document.getElementById('timerBar').style.width = Math.max(0, (timeLeft / TURN_LIMIT) * 100) + '%';
+            timeLeft--;
+            const percentage = (timeLeft / TURN_LIMIT) * 100;
+            document.getElementById('timerBar').style.width = `${percentage}%`;
             
-            // 💡 [신규] 10초 이하로 남았을 때 딱 한 번만 긴박한 소리 재생
-            if (timeLeft <= 10.0 && !isHurryPlayed) {
-                playSound(sndHurry);
-                isHurryPlayed = true;
+            // 💡 시간이 다 되었을 때의 패널티 로직 추가
+            if (timeLeft <= 0) {
+                clearInterval(timerInterval);
+                if (isMyTurn) {
+                    surrender(); // 내 턴에 시간이 다 되면 타임아웃 기권(패배) 처리!
+                }
             }
-
-            if (timeLeft <= 0) { clearInterval(timerInterval); if(currentPlayer === myPlayerNumber) surrender(); }
-        }, 100);
+        }, 1000);
     }
 
     function surrender() { socket.emit('playerSurrender', currentRoomCode); }
@@ -1156,13 +1127,23 @@
     }
 
     // 단숨에 다시 라이브(현재 진행 상황)로 복귀하는 버튼 함수
+    // 💡 [교체] 단숨에 다시 라이브(현재 진행 상황)로 복귀하는 버튼 함수
     function returnToLiveSpectate() {
         isSpectatorReviewMode = false;
         spectatorCurrentStep = gameHistory.length;
         document.getElementById('specReplayStatus').innerText = "🔴 라이브 시청 중";
         
-        // 현재 진짜 게임 보드판 데이터로 즉시 새로고침 원상복구
-        location.reload(); // 혹은 기존의 initBoard/updateUI 연결 상태로 동기화
+        // 💡 튕기는 원인이었던 location.reload()를 삭제하고, 최신 보드판 상태를 다시 그려줍니다!
+        renderVirtualBoardToStep(gameHistory.length); 
+    }
+
+    // 💡 [신규] 게임 종료 후 당사자들이 🔎복기하기 버튼을 눌렀을 때 실행되는 함수
+    function startReviewMode() {
+        document.getElementById('gameOverScreen').style.display = 'none'; // 결과창 숨기기
+        document.getElementById('spectatorReviewControls').style.display = 'block'; // 복기 패널 켜기
+        
+        spectatorCurrentStep = gameHistory.length;
+        stepSpectatorReplay(0); // 최신 상태에서 복기 시작
     }
 
     // 💡 [핵심 복구 2] 증발했던 게임 초기화 및 숫자패드 호출 함수 부활!
