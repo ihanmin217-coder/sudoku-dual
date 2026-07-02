@@ -225,7 +225,10 @@
         <div class="timer-bar" id="timerBar"></div>
     </div>
 
-    <div class="board" id="sudokuBoard"></div>
+    <div class="board-wrapper">
+        <div class="watermark">듀얼</div>
+        <div class="board" id="sudokuBoard"></div>
+    </div>
 
     <div id="spectatorReviewControls" style="display: none; margin-top: 15px; background: #e3f2fd; padding: 10px; border-radius: 8px; border: 2px dashed #1976d2;">
         <div style="font-size: 22px; font-weight: bold; color: #0d47a1; margin-bottom: 5px; text-align: center;">🔎 실시간 복기 모드 (관전자 전용)</div>
@@ -283,6 +286,22 @@
     </div>
 </div>
 
+<div class="modal-overlay" id="createRoomModal" style="display: none;" onclick="closeCreateRoomModal()">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <div style="font-size: 32px; margin-bottom: 20px; color: #d32f2f;">방 개설 설정</div>
+        <div style="text-align: left; font-size: 26px; margin-bottom: 30px; background: white; padding: 15px; border-radius: 8px; border: 2px solid #ccc;">
+            <label style="display: flex; align-items: center; cursor: pointer; margin-bottom: 15px;">
+                <input type="radio" name="roomType" value="public" checked style="transform: scale(1.5); margin-right: 15px;"> 🌍 공개방
+            </label>
+            <label style="display: flex; align-items: center; cursor: pointer;">
+                <input type="radio" name="roomType" value="private" style="transform: scale(1.5); margin-right: 15px;"> 🔒 비밀방
+            </label>
+        </div>
+        <button class="btn-main" onclick="submitCreateRoom()">방 만들기</button>
+        <button class="btn-main" style="background-color: #7f8c8d; border-color: #606b6d; margin-top: 10px;" onclick="closeCreateRoomModal()">취소</button>
+    </div>
+</div>
+
 <div class="modal-overlay" id="creditsModal" onclick="closeCreditsModal()">
     <div class="credits-content" onclick="event.stopPropagation()">
         <h2>오디오 크레딧</h2>
@@ -317,26 +336,6 @@
         <div style="font-size: 28px; margin-bottom: 20px;" id="modalTitle">숫자를 선택하세요</div>
         <div class="numpad" id="numpadGrid"></div>
         <button style="width: 100%; padding: 12px; font-size: 26px; background: #7f8c8d; color: white; border: none; border-radius: 8px; cursor: pointer;" id="cancelBtn" onclick="cancelNumpad()">🔙 취소</button>
-    </div>
-</div>
-
-<div class="modal-overlay" id="createRoomModal" onclick="closeCreateRoomModal()">
-    <div class="modal-content" onclick="event.stopPropagation()">
-        <div style="font-size: 32px; margin-bottom: 20px; color: #d32f2f;">방 개설 설정</div>
-        
-        <div style="text-align: left; font-size: 26px; margin-bottom: 30px; background: white; padding: 15px; border-radius: 8px; border: 2px solid #ccc;">
-            <label style="display: flex; align-items: center; cursor: pointer; margin-bottom: 15px;">
-                <input type="radio" name="roomType" value="public" checked style="transform: scale(1.5); margin-right: 15px;"> 
-                🌍 공개방 (게시판에 표시됨)
-            </label>
-            <label style="display: flex; align-items: center; cursor: pointer;">
-                <input type="radio" name="roomType" value="private" style="transform: scale(1.5); margin-right: 15px;"> 
-                🔒 비밀방 (코드 입력으로만 입장)
-            </label>
-        </div>
-
-        <button class="btn-main" onclick="submitCreateRoom()">방 만들기</button>
-        <button class="btn-main" style="background-color: #7f8c8d; border-color: #606b6d; margin-top: 10px;" onclick="closeCreateRoomModal()">취소</button>
     </div>
 </div>
 
@@ -846,7 +845,7 @@
             announce.innerHTML = `🎉 승리: ${playerNames[gameWinner]} !`;
         }
 
-        document.getElementById('gameOverScreen').style.display = 'block';
+        document.getElementById('gameOverScreen').style.display = 'flex';
     }
 
     // 💡 [버그 방지] 대기실로 돌아갈 때 게임 진행 상태를 초기화해야 다음 버그가 안 생깁니다.
@@ -1164,6 +1163,27 @@
         
         // 현재 진짜 게임 보드판 데이터로 즉시 새로고침 원상복구
         location.reload(); // 혹은 기존의 initBoard/updateUI 연결 상태로 동기화
+    }
+
+    // 💡 [핵심 복구 2] 증발했던 게임 초기화 및 숫자패드 호출 함수 부활!
+    function initBoard() {
+        board = Array.from({length: 9}, () => Array(9).fill(0));
+        const cells = document.querySelectorAll('.cell');
+        cells.forEach(cell => {
+            cell.innerText = '';
+            cell.style.backgroundColor = "transparent";
+            cell.classList.remove('hoverable', 'highlight-box');
+        });
+        
+        isOpeningPhase = true;
+        isFirstTurn = true;
+        currentPlayer = 1;
+        requiredNextBox = null;
+
+        // 게임 시작 시 2P(대결상대) 화면에만 숫자 패드를 띄워서 오프닝 숫자를 고르게 합니다.
+        if (myPlayerNumber === 2) {
+            openNumpadModal(true);
+        }
     }
 </script>
 </body>
