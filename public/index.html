@@ -210,73 +210,56 @@
     </div>
 </div>
 
-<div class="container" id="gameContainer" style="display: none;">
-    <div class="review-controls" id="reviewControls">
-        <button class="btn-nav" id="btnPrevReplay" onclick="changeReplayStep(-1)">◀ 이전</button>
-        
-        <div class="jump-container">
-            <input type="number" id="jumpTurnInput" class="jump-input" value="0" min="0">
-            <span style="font-size: 22px;">/ <span id="maxTurnText">0</span> 수</span>
-            <button class="btn-jump" onclick="jumpToReplayStep()">이동</button>
-        </div>
-
-        <button class="btn-nav" id="btnNextReplay" onclick="changeReplayStep(1)">다음 ▶</button>
-        <button class="btn-nav" style="background-color: #d32f2f; margin-left: 10px;" onclick="backToGameOver()">종료</button>
-    </div>
-
-    <div class="title-text" style="font-size: 45px; margin-bottom: 10px;">스도쿠 듀얼</div>
-
-    <div class="header">
-        <div id="turnText">대기실 접속 중...</div>
-        <div id="scoreText">P1 [0점] vs P2 [0점]</div>
-    </div>
-    <div class="hint-bar" id="hintText">게임 세팅 중...</div>
-    <div class="timer-container"><div class="timer-bar" id="timerBar"></div></div>
-
-    <div class="board-wrapper">
-        <div class="watermark" style="top: 0%; left: 0%;">1</div><div class="watermark" style="top: 0%; left: 33.333%;">2</div><div class="watermark" style="top: 0%; left: 66.666%;">3</div>
-        <div class="watermark" style="top: 33.333%; left: 0%;">4</div><div class="watermark" style="top: 33.333%; left: 33.333%;">5</div><div class="watermark" style="top: 33.333%; left: 66.666%;">6</div>
-        <div class="watermark" style="top: 66.666%; left: 0%;">7</div><div class="watermark" style="top: 66.666%; left: 33.333%;">8</div><div class="watermark" style="top: 66.666%; left: 66.666%;">9</div>
-        <div class="board" id="sudokuBoard"></div>
-    </div>
-
-    <div class="game-over-screen" id="gameOverScreen">
-        <div style="font-size: 60px; color: #d32f2f; margin-bottom: 10px;">GAME OVER</div>
-        <div id="winnerAnounce" style="font-size: 35px; color: #333; margin-bottom: 30px;">승리자 발표</div>
-        <div>
-            <button class="btn-action" style="background: #0288d1; color: white;" onclick="startReviewMode()">🔎 복기하기</button>
-            <button class="btn-action" style="background: #2e7d32; color: white;" onclick="backToWaitingRoom()">대기실로 돌아가기</button>
-            
-            <button class="btn-action" style="background: #f39c12; color: white;" onclick="backToMainLobby()">메인 로비로</button>
-        </div>
-    </div>
-
-    <button onclick="surrender()" style="position: absolute; bottom: 15px; left: 15px; font-size: 24px; background: #e74c3c; color: white; border: 3px solid #333; border-radius: 8px; padding: 10px 18px; cursor: pointer; z-index: 99; box-shadow: 0 4px 6px rgba(0,0,0,0.2); font-weight: bold;">🏳️ 기권하기</button>
-
-    <button onclick="toggleEmoticonPanel()" style="position: absolute; bottom: 15px; right: 15px; font-size: 35px; background: #fcf8eb; border: 3px solid #333; border-radius: 50%; width: 60px; height: 60px; cursor: pointer; z-index: 99; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">💬</button>
+<div class="panel-screen" id="gameContainer" style="display: none; position: relative; padding-bottom: 90px;">
+    <div class="title-text" style="font-size: 40px; margin-bottom: 10px;">스도쿠 듀얼 - 매칭전</div>
     
-    <div class="emoticon-panel" id="emoticonPanel" style="bottom: 85px; right: 15px;">
+    <div style="display: flex; justify-content: space-between; font-size: 28px; margin-bottom: 10px; background: rgba(0,0,0,0.05); padding: 10px; border-radius: 8px;">
+        <div id="p1Info" style="color: #d32f2f; font-weight: bold;">1P (방장): -</div>
+        <div id="p2Info" style="color: #1976d2; font-weight: bold;">2P (상대): -</div>
+    </div>
+    
+    <div id="turnIndicator" style="font-size: 32px; font-weight: bold; margin-bottom: 5px; color: #222;">-</div>
+    <div id="hintText" style="font-size: 24px; color: #666; margin-bottom: 15px; height: 30px;">게임 준비 중...</div>
+
+    <div class="timer-container" id="timerContainer">
+        <div class="timer-bar" id="timerBar"></div>
+    </div>
+
+    <div class="board" id="sudokuBoard"></div>
+
+    <div id="spectatorReviewControls" style="display: none; margin-top: 15px; background: #e3f2fd; padding: 10px; border-radius: 8px; border: 2px dashed #1976d2;">
+        <div style="font-size: 22px; font-weight: bold; color: #0d47a1; margin-bottom: 5px;">🔎 실시간 복기 모드 (관전자 전용)</div>
+        <div style="display: flex; justify-content: center; gap: 10px; align-items: center;">
+            <button class="btn-small" style="background: #1976d2; color: white;" onclick="stepSpectatorReplay(-1)">◀ 이전 수</button>
+            <span id="specReplayStatus" style="font-size: 22px; font-weight: bold; color: #333;">라이브 중</span>
+            <button class="btn-small" style="background: #1976d2; color: white;" onclick="stepSpectatorReplay(1)">다음 수 ▶</button>
+            <button class="btn-small" style="background: #2e7d32; color: white;" onclick="returnToLiveSpectate()">🔴 라이브 보기</button>
+        </div>
+    </div>
+
+    <div class="chat-container" style="margin: 25px auto 0; width: 100%; max-width: 460px;">
+        <div class="chat-messages" id="gameChatMessages" style="height: 100px;"></div>
+        <div class="chat-input-area">
+            <input type="text" id="gameChatInput" class="chat-input" placeholder="실시간 대화 및 훈수 가능...">
+            <button class="btn-chat-send" onclick="sendRoomChat('game')">전송</button>
+        </div>
+    </div>
+
+    <button id="inGameSurrenderBtn" onclick="surrender()" style="position: absolute; bottom: 15px; left: 15px; font-size: 22px; background: #e74c3c; color: white; border: 3px solid #333; border-radius: 8px; padding: 8px 15px; cursor: pointer; z-index: 101; box-shadow: 0 4px 6px rgba(0,0,0,0.2); font-weight: bold;">🏳️ 기권하기</button>
+
+    <button onclick="toggleEmoticonPanel()" style="position: absolute; bottom: 15px; right: 15px; font-size: 30px; background: #fcf8eb; border: 3px solid #333; border-radius: 50%; width: 55px; height: 55px; cursor: pointer; z-index: 101; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">💬</button>
+    
+    <div class="emoticon-panel" id="emoticonPanel" style="position: absolute; bottom: 80px; right: 15px; z-index: 102;">
         <button class="emoticon-btn" onclick="sendEmoticon('🤔')">🤔</button>
         <button class="emoticon-btn" onclick="sendEmoticon('👏')">👏</button>
         <button class="emoticon-btn" onclick="sendEmoticon('😭')">😭</button>
         <button class="emoticon-btn" onclick="sendEmoticon('😡')">😡</button>
         <button class="emoticon-btn" onclick="sendEmoticon('😎')">😎</button>
         <button class="emoticon-btn" onclick="sendEmoticon('😱')">😱</button>
-        
         <button class="btn-emoticon-text emoticon-btn emoticon-text" onclick="sendEmoticon('앗, 실수!')">앗, 실수!</button>
         <button class="btn-emoticon-text emoticon-btn emoticon-text" onclick="sendEmoticon('나이스!')">나이스!</button>
         <button class="btn-emoticon-text emoticon-btn emoticon-text" onclick="sendEmoticon('빨리 해줘요~')">빨리 해줘요~</button>
         <button class="btn-emoticon-text emoticon-btn emoticon-text" onclick="sendEmoticon('한 수 배웠습니다!')">한 수 배웠습니다!</button>
-    </div>
-
-    <div id="emoticonToast" class="toast-popup"></div>
-
-    <div class="chat-container" style="margin: 15px auto 0; max-width: 480px;">
-        <div class="chat-messages" id="gameChatMessages" style="height: 100px;"></div>
-        <div class="chat-input-area">
-            <input type="text" id="gameChatInput" class="chat-input" placeholder="인게임 실시간 대화..." onkeypress="if(event.keyCode==13) sendRoomChat('game')">
-            <button class="btn-chat-send" onclick="sendRoomChat('game')">전송</button>
-        </div>
     </div>
 </div>
 
@@ -591,6 +574,18 @@
             const radioBtn = document.querySelector(`input[name="turnPref"][value="${pref}"]`);
             if (radioBtn) radioBtn.checked = true;
         }
+
+        // 💡 socket.on('roomStateUpdated') 내부의 버튼 제어 부분에 아래 조건을 보강해 주세요!
+        if (isMyHost) {
+            document.getElementById('hostControls').style.display = 'block';
+            document.getElementById('guestControls').style.display = 'none';
+        } else {
+            document.getElementById('hostControls').style.display = 'none';
+        
+             // 내가 대결 상대(2P)일 때만 준비 버튼을 보이고, 관전자(3P+)라면 준비 버튼마저 숨깁니다!
+            const isSelectedGuest = room.selectedGuestId === socket.id;
+            document.getElementById('guestControls').style.display = isSelectedGuest ? 'block' : 'none';
+        }
     });
 
     // 이모티콘 전송 및 수신
@@ -640,55 +635,41 @@
     socket.on('roleAssigned', (data) => { myPlayerNumber = data.playerNumber; });
 
     // 💡 [교체] 기존 gameStart 수신부를 아래 코드로 통째로 덮어씌웁니다.
-// 💡 [완벽 교체] 중복되어 있던 2개의 gameStart 수신부를 모두 지우고 이 코드 하나만 남기세요!
+    // 💡 [완벽 교체] 중복되어 있던 2개의 gameStart 수신부를 모두 지우고 이 코드 하나만 남기세요!
+    // 💡 [교체] 관전자 숨김 처리 및 실시간 복기 시스템을 지원하는 gameStart 수신부
     socket.on('gameStart', (data) => {
-        // 💡 [디버깅 추가] 데이터가 제대로 들어오는지 확인합니다.
-        console.log("게임 시작 신호 수신됨!");
-        console.log("서버가 보내준 데이터(data):", data);
-        console.log("내 소켓 ID (socket.id):", socket.id);
-
-        if (data.roles && data.roles[socket.id]) {
-            myPlayerNumber = data.roles[socket.id];
-            console.log("내 역할 배정 완료:", myPlayerNumber);
-        } else {
-            console.error("역할 배정 실패! 서버의 roles 데이터에 내 ID가 없습니다.");
-        }
-        // 💡 [핵심 버그 픽스] 서버가 발급해 준 내 고유 ID(myId)를 사용해 내 플레이어 번호를 100% 확실하게 부여받습니다.
-        if (data.roles && data.roles[myId]) {
-            myPlayerNumber = data.roles[myId];
-        }
-
-        playerNames = data.players;
-        board = Array.from({length: 9}, () => Array(9).fill(0));
-        scores = {1: 0, 2: 0};
-        currentPlayer = 2; 
-        isOpeningPhase = true;
-        openingNumber = null;
-        isFirstTurn = true;
-        requiredNextBox = null;
-        isGameOver = false;
         isGameStarted = true;
-        isReviewMode = false;
-        gameHistory = [];
+        isGameOver = false;
+        gameHistory = []; // 복기용 기록 초기화
         
+        // 화면 전환
         document.getElementById('waitingRoomScreen').style.display = 'none';
-        document.getElementById('gameOverScreen').style.display = 'none';
-        document.getElementById('reviewControls').style.display = 'none';
         document.getElementById('gameContainer').style.display = 'block';
 
-        // 배경음악 재생
-        sndBgm.play().catch(()=>{});
+        playerNames[1] = data.players[1];
+        playerNames[2] = data.players[2];
+        document.getElementById('p1Info').innerText = `1P (방장): ${playerNames[1]}`;
+        document.getElementById('p2Info').innerText = `2P (상대): ${playerNames[2]}`;
 
-        // 💡 게임 시작 직후 타이머를 바로 작동시킵니다.
-        startTimer();
-        updateUI();
-        
-        // 💡 내가 2P(후공)라면 정확하게 모달창과 방울 소리를 띄웁니다.
-        if (myPlayerNumber === 2) {
-            playSound(sndBell);
-            openNumpadModal(true);
-        }
+        myPlayerNumber = data.roles[socket.id] || 0; // 💡 0이면 관전자(3P 이상)입니다!
         TURN_LIMIT = data.turnLimit || 60;
+
+        // 💡 [개선 사항 1] 관전자 권한에 따른 인게임 버튼 제어
+        if (myPlayerNumber === 0) {
+            // 관전자는 기권하기 버튼을 숨기고, 실시간 복기 패널을 켭니다.
+            document.getElementById('inGameSurrenderBtn').style.display = 'none';
+            document.getElementById('spectatorReviewControls').style.display = 'block';
+            isSpectatorReviewMode = false; // 기본은 실시간 라이브 시청 상태
+            document.getElementById('specReplayStatus').innerText = "🔴 라이브 시청 중";
+        } else {
+            // 실제 플레이어는 기권 버튼을 보이고, 복기 패널을 숨깁니다.
+            document.getElementById('inGameSurrenderBtn').style.display = 'block';
+            document.getElementById('spectatorReviewControls').style.display = 'none';
+        }
+
+        sndBgm.play();
+        initBoard();
+        updateUI();
     });
 
     // 💡 [교체] moveApproved 전체 로직에서 play()를 playSound()로 변경합니다.
@@ -1105,6 +1086,65 @@
             gameBox.scrollTop = gameBox.scrollHeight; // 스크롤 맨 아래로 자동 고정
         }
     });
+
+    // 💡 [신규] 관전자 전용 실시간 복기 구동 엔진 함수들
+    let isSpectatorReviewMode = false;
+    let spectatorCurrentStep = 0;
+
+    // 대결 유저들이 한 수 둘 때마다 역사 기록(gameHistory)에 자동 누적하는 장치 보완
+    socket.on('moveApproved', (data) => {
+        // 기존 렌더링 코드 실행 후 기록 저장
+        if (data.move && !data.move.isOpening) {
+            gameHistory.push(data.move); // 한 수 둘 때마다 배열에 턴 기록 저장
+            
+            // 만약 관전자가 과거를 보지 않고 라이브 시청 중이라면, 최신 화면으로 자동 동기화
+            if (myPlayerNumber === 0 && !isSpectatorReviewMode) {
+                spectatorCurrentStep = gameHistory.length;
+            }
+        }
+    });
+
+    // 버튼 클릭 시 이전/다음 수로 보드판 스냅샷 이동
+    function stepSpectatorReplay(dir) {
+        if (gameHistory.length === 0) return alert('아직 진행된 턴이 없습니다!');
+        isSpectatorReviewMode = true;
+        
+        spectatorCurrentStep += dir;
+        if (spectatorCurrentStep < 0) spectatorCurrentStep = 0;
+        if (spectatorCurrentStep > gameHistory.length) spectatorCurrentStep = gameHistory.length;
+
+        document.getElementById('specReplayStatus').innerText = `🔎 복기 중 (${spectatorCurrentStep}/${gameHistory.length} 턴)`;
+
+        // 빈 보드판을 가상으로 만들고 특정 턴까지 재현해서 화면을 그려줍니다.
+        renderVirtualBoardToStep(spectatorCurrentStep);
+    }
+
+    // 가상 재현 서브 함수
+    function renderVirtualBoardToStep(step) {
+        // 모든 칸 초기화 (기존 데이터와 충돌 방지)
+        const cells = document.querySelectorAll('.cell');
+        cells.forEach(c => { c.innerText = ''; c.style.backgroundColor = 'white'; });
+
+        // 첫 턴부터 지정한 턴(step)까지의 수만 순서대로 보드판에 그려줌
+        for (let i = 0; i < step; i++) {
+            const move = gameHistory[i];
+            const targetCell = document.querySelector(`.cell[data-row="${move.row}"][data-col="${move.col}"]`);
+            if (targetCell) {
+                targetCell.innerText = move.number;
+                targetCell.style.backgroundColor = '#e8f5e9'; // 복기 중인 칸은 연두색 강조
+            }
+        }
+    }
+
+    // 단숨에 다시 라이브(현재 진행 상황)로 복귀하는 버튼 함수
+    function returnToLiveSpectate() {
+        isSpectatorReviewMode = false;
+        spectatorCurrentStep = gameHistory.length;
+        document.getElementById('specReplayStatus').innerText = "🔴 라이브 시청 중";
+        
+        // 현재 진짜 게임 보드판 데이터로 즉시 새로고침 원상복구
+        location.reload(); // 혹은 기존의 initBoard/updateUI 연결 상태로 동기화
+    }
 </script>
 </body>
 </html>
