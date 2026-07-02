@@ -210,16 +210,16 @@
     </div>
 </div>
 
-<div class="panel-screen" id="gameContainer" style="display: none; position: relative; padding-bottom: 90px;">
-    <div class="title-text" style="font-size: 40px; margin-bottom: 10px;">스도쿠 듀얼 - 매칭전</div>
+<div class="container" id="gameContainer" style="display: none; position: relative; padding-bottom: 90px; margin-top: 30px;">
+    <div class="title-text" style="font-size: 40px; margin-bottom: 10px; text-align: center;">스도쿠 듀얼 - 매칭전</div>
     
     <div style="display: flex; justify-content: space-between; font-size: 28px; margin-bottom: 10px; background: rgba(0,0,0,0.05); padding: 10px; border-radius: 8px;">
         <div id="p1Info" style="color: #d32f2f; font-weight: bold;">1P (방장): -</div>
         <div id="p2Info" style="color: #1976d2; font-weight: bold;">2P (상대): -</div>
     </div>
     
-    <div id="turnIndicator" style="font-size: 32px; font-weight: bold; margin-bottom: 5px; color: #222;">-</div>
-    <div id="hintText" style="font-size: 24px; color: #666; margin-bottom: 15px; height: 30px;">게임 준비 중...</div>
+    <div id="turnIndicator" style="font-size: 32px; font-weight: bold; margin-bottom: 5px; color: #222; text-align: center;">-</div>
+    <div id="hintText" style="font-size: 24px; color: #666; margin-bottom: 15px; height: 30px; text-align: center;">게임 준비 중...</div>
 
     <div class="timer-container" id="timerContainer">
         <div class="timer-bar" id="timerBar"></div>
@@ -228,7 +228,7 @@
     <div class="board" id="sudokuBoard"></div>
 
     <div id="spectatorReviewControls" style="display: none; margin-top: 15px; background: #e3f2fd; padding: 10px; border-radius: 8px; border: 2px dashed #1976d2;">
-        <div style="font-size: 22px; font-weight: bold; color: #0d47a1; margin-bottom: 5px;">🔎 실시간 복기 모드 (관전자 전용)</div>
+        <div style="font-size: 22px; font-weight: bold; color: #0d47a1; margin-bottom: 5px; text-align: center;">🔎 실시간 복기 모드 (관전자 전용)</div>
         <div style="display: flex; justify-content: center; gap: 10px; align-items: center;">
             <button class="btn-small" style="background: #1976d2; color: white;" onclick="stepSpectatorReplay(-1)">◀ 이전 수</button>
             <span id="specReplayStatus" style="font-size: 22px; font-weight: bold; color: #333;">라이브 중</span>
@@ -240,7 +240,7 @@
     <div class="chat-container" style="margin: 25px auto 0; width: 100%; max-width: 460px;">
         <div class="chat-messages" id="gameChatMessages" style="height: 100px;"></div>
         <div class="chat-input-area">
-            <input type="text" id="gameChatInput" class="chat-input" placeholder="실시간 대화 및 훈수 가능...">
+            <input type="text" id="gameChatInput" class="chat-input" placeholder="실시간 대화 및 훈수 가능..." onkeypress="if(event.keyCode==13) sendRoomChat('game')">
             <button class="btn-chat-send" onclick="sendRoomChat('game')">전송</button>
         </div>
     </div>
@@ -260,6 +260,26 @@
         <button class="btn-emoticon-text emoticon-btn emoticon-text" onclick="sendEmoticon('나이스!')">나이스!</button>
         <button class="btn-emoticon-text emoticon-btn emoticon-text" onclick="sendEmoticon('빨리 해줘요~')">빨리 해줘요~</button>
         <button class="btn-emoticon-text emoticon-btn emoticon-text" onclick="sendEmoticon('한 수 배웠습니다!')">한 수 배웠습니다!</button>
+    </div>
+</div>
+
+<div class="game-over-screen" id="gameOverScreen" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; justify-content: center; align-items: center; flex-direction: column;">
+    <div style="background: white; padding: 40px; border-radius: 12px; text-align: center; border: 4px solid #222; max-width: 450px; width: 90%;">
+        <div style="font-size: 60px; color: #d32f2f; margin-bottom: 10px; font-weight: bold;">GAME OVER</div>
+        <div id="winnerAnounce" style="font-size: 35px; color: #333; margin-bottom: 30px;">승리자 발표</div>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+            <button class="btn-main" style="background: #0288d1; color: white; margin: 0; width: 100%;" onclick="startReviewMode()">🔎 복기하기</button>
+            <button class="btn-main" style="background: #2e7d32; color: white; margin: 0; width: 100%;" onclick="backToWaitingRoom()">대기실로 돌아가기</button>
+            <button class="btn-main" style="background: #f39c12; color: white; margin: 0; width: 100%;" onclick="backToMainLobby()">메인 로비로</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="numpadModal" style="display: none;" onclick="cancelNumpad()">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <div style="font-size: 28px; margin-bottom: 20px;" id="modalTitle">숫자를 선택하세요</div>
+        <div class="numpad" id="numpadGrid"></div>
+        <button style="width: 100%; padding: 12px; font-size: 26px; background: #7f8c8d; color: white; border: none; border-radius: 8px; cursor: pointer;" id="cancelBtn" onclick="cancelNumpad()">🔙 취소</button>
     </div>
 </div>
 
