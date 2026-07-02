@@ -37,7 +37,8 @@
         .timer-bar { width: 100%; height: 100%; background-color: #d32f2f; transition: width 0.1s linear; }
 
         .board-wrapper { position: relative; width: 100%; aspect-ratio: 1; margin-bottom: 25px; background-color: #fcf8eb; border: 4px solid #222; box-sizing: border-box; }
-        .watermark { position: absolute; width: 33.333%; height: 33.333%; display: flex; justify-content: center; align-items: center; font-size: 160px; color: rgba(0, 0, 0, 0.08); pointer-events: none; z-index: 1; line-height: 1; }
+        /* 💡 [버그 픽스] 워터마크가 1, 4번 칸에 찌그러지는 현상 해결 (전체 덮기) */
+        .watermark { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; font-size: 140px; letter-spacing: 35px; color: rgba(0, 0, 0, 0.05); pointer-events: none; z-index: 1; font-weight: bold; }
         .board { display: grid; grid-template-columns: repeat(9, 1fr); grid-template-rows: repeat(9, 1fr); width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 2; }
         .cell { background-color: transparent; display: flex; align-items: center; justify-content: center; font-size: 38px; color: #222; cursor: pointer; transition: background-color 0.2s; border-right: 1px solid #aaa; border-bottom: 1px solid #aaa; box-sizing: border-box; }
         .cell:nth-child(9n) { border-right: none; }
@@ -636,6 +637,7 @@
     }
 
     // 💡 [교체] 음악 재생 및 서버 데이터 누락 대비 보호막이 추가된 gameStart
+    // 💡 [버그 픽스] 플레이어가 '관전자(0)'로 오해받아 패드가 안 뜨고 먹통이 되는 치명적 버그 해결!
     socket.on('gameStart', (data) => {
         isGameStarted = true;
         isGameOver = false;
@@ -651,22 +653,25 @@
             document.getElementById('p2Info').innerText = `2P (상대): ${playerNames[2]}`;
         }
 
-        myPlayerNumber = (data && data.roles) ? data.roles[socket.id] || 0 : (myPlayerNumber || 0); 
+        // 🛡️ 핵심 수정: socket.id 대신 확실하게 고정된 myId를 사용하여 권한을 완벽하게 부여받습니다!
+        myPlayerNumber = (data && data.roles) ? data.roles[myId] || 0 : (myPlayerNumber || 0); 
         TURN_LIMIT = (data && data.turnLimit) ? data.turnLimit : 60;
 
         if (myPlayerNumber === 0) {
+            // 관전자 모드 세팅
             document.getElementById('inGameSurrenderBtn').style.display = 'none';
             document.getElementById('spectatorReviewControls').style.display = 'block';
             isSpectatorReviewMode = false; 
             document.getElementById('specReplayStatus').innerText = "🔴 라이브 시청 중";
         } else {
+            // 실제 플레이어 세팅 (여기가 정상 작동하여 이제 패드가 무조건 뜹니다!)
             document.getElementById('inGameSurrenderBtn').style.display = 'block';
             document.getElementById('spectatorReviewControls').style.display = 'none';
         }
 
-        playBgmSafely(); // 💡 위에서 만든 안전한 음악 재생 함수 호출!
+        playBgmSafely(); 
         initBoard();
-        updateUI();      // 💡 이제 이 함수가 에러를 뿜지 않으므로 모든 모달이 정상적으로 뜹니다!
+        updateUI();      
     });
     // 💡 [교체] moveApproved 전체 로직에서 play()를 playSound()로 변경합니다.
     socket.on('moveApproved', (data) => {
