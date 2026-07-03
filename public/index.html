@@ -753,50 +753,33 @@
         updateUI();      
     });
 
-    // 💡 [교체] moveApproved 전체 로직에서 play()를 playSound()로 변경합니다.
+    // 💡 [교체] 최신 수가 오차 없이 즉시 주황색으로 빛나도록 순서를 교정한 moveApproved
     socket.on('moveApproved', (data) => {
-        const move = data.move;
-        const result = data.turnResult;
-
-        if (move.isOpening) {
-            openingNumber = move.number;
-            isOpeningPhase = false;
-            currentPlayer = 1;
-            
-            if (myPlayerNumber === 1) playSound(sndBell); // 💡 교체됨
-
-            updateUI();
-            startTimer();
-        } else {
-            // 보드에 숫자 기록 및 연필 소리 재생
-            board[move.row][move.col] = move.number;
-            playSound(sndPencil); // 💡 교체됨
-            
-            if (result) {
-                if (result.isGameOver) {
-                    gameHistory = result.history;
-                    endGame(result.winner, result.isSuffocated, false);
-                    return;
+        if (data.move) {
+            if (!data.move.isOpening) {
+                gameHistory.push(data.move);
+                if (myPlayerNumber === 0 && !isSpectatorReviewMode) {
+                    spectatorCurrentStep = gameHistory.length;
                 }
-
-                scores = result.scores;
-                currentPlayer = result.nextPlayer;
-                requiredNextBox = result.requiredNextBox;
-                isFirstTurn = result.isFirstTurn;
-                
-                // 내 턴이 되었을 때만 방울 소리 재생
-                if (result.nextPlayer === myPlayerNumber) {
-                    playSound(sndBell); // 💡 교체됨
-                }
-            } else {
-                isFirstTurn = false;
-                requiredNextBox = move.number;
-                currentPlayer = 2;
-                
-                if (myPlayerNumber === 2) playSound(sndBell); // 💡 교체됨
             }
+            
+            // 🛡️ 중요: 먼저 보드판 데이터를 업데이트하고, 최신 lastMove 좌표를 확보한 뒤에!!
+            board[data.move.row][data.move.col] = data.move.number;
+            lastMove = { row: data.move.row, col: data.move.col };
+            
+            currentPlayer = data.nextPlayer;
+            requiredNextBox = data.requiredNextBox;
+            isFirstTurn = data.isFirstTurn;
+            isOpeningPhase = data.isOpeningPhase;
+            openingNumber = data.openingNumber;
 
+            // 🛡️ 모든 데이터가 확실히 주머니에 들어온 '마지막 순간'에 화면을 그려야 제 타이밍에 빛납니다.
             updateUI();
+            
+            if (data.move.number !== 0) {
+                playSound(sndPencil);
+            }
+            
             startTimer();
         }
     });
@@ -1234,19 +1217,35 @@
         renderVirtualBoardToStep(spectatorCurrentStep);
     }
 
-    // 가상 재현 서브 함수
+    // 💡 [교체] 복기 시점(Step)에 맞춰 주황색 불빛도 실시간으로 과거 위치를 추적하게 만드는 함수
     function renderVirtualBoardToStep(step) {
-        // 모든 칸 초기화 (기존 데이터와 충돌 방지)
         const cells = document.querySelectorAll('.cell');
-        cells.forEach(c => { c.innerText = ''; c.style.backgroundColor = 'white'; });
+        cells.forEach(c => { 
+            c.innerText = ''; 
+            c.style.backgroundColor = 'white'; 
+            c.classList.remove('last-move'); // 이전 주황색 불빛 청소
+        });
 
-        // 첫 턴부터 지정한 턴(step)까지의 수만 순서대로 보드판에 그려줌
+        // 🛡️ 복기 모드용 가상 lastMove 주머니
+        let virtualLastMove = null;
+
         for (let i = 0; i < step; i++) {
             const move = gameHistory[i];
             const targetCell = document.querySelector(`.cell[data-row="${move.row}"][data-col="${move.col}"]`);
             if (targetCell) {
                 targetCell.innerText = move.number;
-                targetCell.style.backgroundColor = '#e8f5e9'; // 복기 중인 칸은 연두색 강조
+                targetCell.style.backgroundColor = '#e8f5e9'; // 지나온 자리는 연두색
+                
+                // 🛡️ 현재 복기 중인 시점의 가장 '마지막 좌표'를 갱신하며 기억합니다.
+                virtualLastMove = { row: move.row, col: move.col };
+            }
+        }
+
+        // 🛡️ 과거 시점 렌더링이 다 끝난 후, 그 시점의 마지막 수 자리에만 주황색 불빛 탁! 켜주기
+        if (virtualLastMove) {
+            const activeCell = document.querySelector(`.cell[data-row="${virtualLastMove.row}"][data-col="${virtualLastMove.col}"]`);
+            if (activeCell) {
+                activeCell.classList.add('last-move');
             }
         }
     }
