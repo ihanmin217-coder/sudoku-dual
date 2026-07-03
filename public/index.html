@@ -227,7 +227,17 @@
     </div>
 
     <div class="board-wrapper">
-        <div class="watermark">듀얼</div>
+        <div class="macro-watermarks" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); pointer-events: none; z-index: 1;">
+            <div style="display: flex; justify-content: center; align-items: center; font-size: 110px; color: rgba(0, 0, 0, 0.04); font-weight: bold;">1</div>
+            <div style="display: flex; justify-content: center; align-items: center; font-size: 110px; color: rgba(0, 0, 0, 0.04); font-weight: bold;">2</div>
+            <div style="display: flex; justify-content: center; align-items: center; font-size: 110px; color: rgba(0, 0, 0, 0.04); font-weight: bold;">3</div>
+            <div style="display: flex; justify-content: center; align-items: center; font-size: 110px; color: rgba(0, 0, 0, 0.04); font-weight: bold;">4</div>
+            <div style="display: flex; justify-content: center; align-items: center; font-size: 110px; color: rgba(0, 0, 0, 0.04); font-weight: bold;">5</div>
+            <div style="display: flex; justify-content: center; align-items: center; font-size: 110px; color: rgba(0, 0, 0, 0.04); font-weight: bold;">6</div>
+            <div style="display: flex; justify-content: center; align-items: center; font-size: 110px; color: rgba(0, 0, 0, 0.04); font-weight: bold;">7</div>
+            <div style="display: flex; justify-content: center; align-items: center; font-size: 110px; color: rgba(0, 0, 0, 0.04); font-weight: bold;">8</div>
+            <div style="display: flex; justify-content: center; align-items: center; font-size: 110px; color: rgba(0, 0, 0, 0.04); font-weight: bold;">9</div>
+        </div>
         <div class="board" id="sudokuBoard"></div>
     </div>
 
@@ -236,7 +246,6 @@
 
         <div style="position: relative;">
             <button onclick="toggleEmoticonPanel()" style="font-size: 24px; background: #fcf8eb; border: 3px solid #333; border-radius: 50%; width: 50px; height: 50px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">💬</button>
-            
             <div class="emoticon-panel" id="emoticonPanel" style="position: absolute; bottom: 60px; right: 0; z-index: 102; width: 220px; display: none;">
                 <button class="emoticon-btn" onclick="sendEmoticon('🤔')">🤔</button>
                 <button class="emoticon-btn" onclick="sendEmoticon('👏')">👏</button>
@@ -252,7 +261,13 @@
         </div>
     </div>
 
-    <div class="chat-container" style="margin: 15px auto 0; width: 100%; max-width: 460px;">...</div>
+    <div class="chat-container" style="margin: 15px auto 0; width: 100%; max-width: 460px;">
+        <div class="chat-messages" id="gameChatMessages" style="height: 100px;"></div>
+        <div class="chat-input-area">
+            <input type="text" id="gameChatInput" class="chat-input" placeholder="실시간 대화 및 훈수 가능..." onkeypress="if(event.keyCode==13) sendRoomChat('game')">
+            <button class="btn-chat-send" onclick="sendRoomChat('game')">전송</button>
+        </div>
+    </div>
 </div>
 
 <div class="game-over-screen" id="gameOverScreen" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; justify-content: center; align-items: center; flex-direction: column;">
@@ -622,22 +637,27 @@
     // 💡 [완벽 교체] 중복되어 있던 2개의 gameStart 수신부를 모두 지우고 이 코드 하나만 남기세요!
     // 💡 [교체] 관전자 숨김 처리 및 실시간 복기 시스템을 지원하는 gameStart 수신부
     // 💡 [신규] 브라우저의 음악 차단을 우회하여 첫 클릭 시 무조건 재생시키는 함수
+    // 💡 [교체] 브라우저의 오디오 차단으로 인한 자바스크립트 크래시를 100% 방지하는 우회 함수
     function playBgmSafely() {
-        sndBgm.currentTime = 0;
-        const playPromise = sndBgm.play();
-        
-        if (playPromise !== undefined) {
-            playPromise.catch(err => {
-                document.body.addEventListener('click', function forceBgm() {
-                    sndBgm.play().catch(()=>{});
-                    document.body.removeEventListener('click', forceBgm);
-                }, { once: true });
-            });
+        try {
+            sndBgm.currentTime = 0;
+            const playPromise = sndBgm.play();
+            
+            if (playPromise !== undefined) {
+                playPromise.catch(err => {
+                    console.log("🔊 오디오 자동재생이 차단되었습니다. 첫 클릭 시 활성화됩니다.");
+                    document.body.addEventListener('click', function forceBgm() {
+                        sndBgm.play().catch(()=>{});
+                        document.body.removeEventListener('click', forceBgm);
+                    }, { once: true });
+                });
+            }
+        } catch (e) {
+            console.warn("오디오 플레이어 하드웨어 예외 발생 수용:", e);
         }
     }
 
-    // 💡 [교체] 음악 재생 및 서버 데이터 누락 대비 보호막이 추가된 gameStart
-    // 💡 [버그 픽스] 플레이어가 '관전자(0)'로 오해받아 패드가 안 뜨고 먹통이 되는 치명적 버그 해결!
+    // 💡 [교체] 에러 예외 처리가 완료되어 무조건 숫자 패드가 실행되는 gameStart 수신부
     socket.on('gameStart', (data) => {
         isGameStarted = true;
         isGameOver = false;
@@ -653,26 +673,25 @@
             document.getElementById('p2Info').innerText = `2P (상대): ${playerNames[2]}`;
         }
 
-        // 🛡️ 핵심 수정: socket.id 대신 확실하게 고정된 myId를 사용하여 권한을 완벽하게 부여받습니다!
-        myPlayerNumber = (data && data.roles) ? data.roles[myId] || 0 : (myPlayerNumber || 0); 
+        // 🛡️ 멀티 소켓 환경 대응을 위해 본인 소켓 식별값 이중 검증
+        myPlayerNumber = (data && data.roles) ? (data.roles[socket.id] || data.roles[myId] || 0) : (myPlayerNumber || 0); 
         TURN_LIMIT = (data && data.turnLimit) ? data.turnLimit : 60;
 
         if (myPlayerNumber === 0) {
-            // 관전자 모드 세팅
             document.getElementById('inGameSurrenderBtn').style.display = 'none';
             document.getElementById('spectatorReviewControls').style.display = 'block';
             isSpectatorReviewMode = false; 
             document.getElementById('specReplayStatus').innerText = "🔴 라이브 시청 중";
         } else {
-            // 실제 플레이어 세팅 (여기가 정상 작동하여 이제 패드가 무조건 뜹니다!)
             document.getElementById('inGameSurrenderBtn').style.display = 'block';
             document.getElementById('spectatorReviewControls').style.display = 'none';
         }
 
-        playBgmSafely(); 
-        initBoard();
+        playBgmSafely(); // 오디오 차단 유무와 상관없이
+        initBoard();     // 🌟 이제 이 숫자 패드 생성 코드가 100% 무조건 정상 실행됩니다!
         updateUI();      
     });
+
     // 💡 [교체] moveApproved 전체 로직에서 play()를 playSound()로 변경합니다.
     socket.on('moveApproved', (data) => {
         const move = data.move;
@@ -805,13 +824,11 @@
         endGame(data.winnerRole, false, true);
     });
 
-    // 💡 [교체] 기권/탈주(isSurrendered)인 경우를 처리할 수 있도록 함수를 확장합니다.
-    // 💡 [교체] 에러가 나도 결과창이 무조건 뜨도록 보호막(try-catch)을 씌운 endGame
+    // 💡 [교체] 관전자 권한(0번) 데이터 미매칭 버그가 수정된 게임 오버 정산 함수
     function endGame(gameWinner, isSuffocated, isSurrendered) {
         isGameOver = true;
         clearInterval(timerInterval);
         
-        // 오디오 로딩 에러 때문에 화면이 안 뜨는 현상 방지
         try {
             sndBgm.pause();
             sndBgm.currentTime = 0;
@@ -821,12 +838,15 @@
         updateUI();
         const announce = document.getElementById('winnerAnounce');
         
+        // 🛡️ 관전자(0) 유저 리드가 오염되지 않도록, 공인 승리 주소값(gameWinner)으로 이름을 명확하게 강제 매칭합니다.
+        const finalWinnerName = playerNames[gameWinner] || '우승자';
+        
         if (isSurrendered) {
-            announce.innerHTML = `🏃 상대방이 접속을 종료/기권했습니다!<br>🎉 승리: ${playerNames[myPlayerNumber]}`;
+            announce.innerHTML = `🏃 상대방이 접속을 종료/기권했습니다!<br>🎉 승리: ${finalWinnerName}`;
         } else if (isSuffocated) {
-            announce.innerHTML = `💀 더 이상 둘 곳이 없습니다 (질식)!<br>🎉 승리: ${playerNames[gameWinner]}`;
+            announce.innerHTML = `💀 더 이상 둘 곳이 없습니다 (질식)!<br>🎉 승리: ${finalWinnerName}`;
         } else {
-            announce.innerHTML = `🎉 승리: ${playerNames[gameWinner]} !`;
+            announce.innerHTML = `🎉 승리: ${finalWinnerName} !`;
         }
 
         document.getElementById('gameOverScreen').style.display = 'flex';
