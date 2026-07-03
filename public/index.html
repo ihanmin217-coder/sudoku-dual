@@ -241,6 +241,16 @@
         <div class="board" id="sudokuBoard"></div>
     </div>
 
+    <div id="spectatorReviewControls" style="display: none; margin-top: 15px; background: #e3f2fd; padding: 10px; border-radius: 8px; border: 2px dashed #1976d2;">
+        <div style="font-size: 22px; font-weight: bold; color: #0d47a1; margin-bottom: 5px; text-align: center;">🔎 실시간 복기 모드 (관전자 전용)</div>
+        <div style="display: flex; justify-content: center; gap: 10px; align-items: center;">
+            <button class="btn-small" style="background: #1976d2; color: white;" onclick="stepSpectatorReplay(-1)">◀ 이전 수</button>
+            <span id="specReplayStatus" style="font-size: 22px; font-weight: bold; color: #333;">라이브 중</span>
+            <button class="btn-small" style="background: #1976d2; color: white;" onclick="stepSpectatorReplay(1)">다음 수 ▶</button>
+            <button class="btn-small" style="background: #2e7d32; color: white;" onclick="returnToLiveSpectate()">🔴 라이브 보기</button>
+        </div>
+    </div>
+
     <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; width: 100%; max-width: 460px; margin-left: auto; margin-right: auto;">
         <button id="inGameSurrenderBtn" onclick="surrender()" style="font-size: 20px; background: #e74c3c; color: white; border: 3px solid #333; border-radius: 8px; padding: 8px 15px; cursor: pointer; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">🏳️ 기권하기</button>
 
