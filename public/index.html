@@ -8,6 +8,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Nanum+Pen+Script&display=swap" rel="stylesheet">
     <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
     <style>
         body { background-color: #e0e0e0; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; user-select: none; }
         * { font-family: 'Nanum Pen Script', cursive; }
@@ -114,9 +116,12 @@
         .chat-input-area { display: flex; border-top: 1px solid #ccc; background: white; border-radius: 0 0 6px 6px; }
         .chat-input { flex: 1; border: none; padding: 10px; font-size: 22px; outline: none; background: transparent; }
         .btn-chat-send { background: #34495e; color: white; border: none; padding: 0 15px; font-size: 20px; cursor: pointer; border-radius: 0 0 6px 0; }
+        /* 💡 [신규] 마지막으로 둔 칸을 눈에 띄게 강조하는 스타일 */
+        .last-move { background-color: #fff9c4 !important; outline: 3px solid #f39c12; outline-offset: -2px; z-index: 5; transition: all 0.3s; box-shadow: 0 0 10px rgba(243, 156, 18, 0.5); }
     </style>
 </head>
 <body>
+    <button id="soundToggleBtn" onclick="toggleSound()" style="position: fixed; top: 15px; right: 15px; font-size: 24px; background: white; border: 2px solid #ccc; border-radius: 50%; width: 45px; height: 45px; cursor: pointer; z-index: 2000; box-shadow: 0 2px 5px rgba(0,0,0,0.2);">🔊</button>
     <button class="audio-control-btn" onclick="toggleAudioPanel()">🔊 소리 설정</button>
     <div class="audio-panel" id="audioPanel">
         <label>
@@ -347,6 +352,23 @@
 
     // 💡 [신규] 방 코드 숨기기/보이기 기능
     let isRoomCodeHidden = false;
+
+    // 💡 [신규] 폴리싱 변수들
+    let isMuted = false;
+    let lastMove = null; // 방금 둔 수의 좌표 기억
+
+    // 💡 [신규] 사운드 켜기/끄기 토글 함수
+    function toggleSound() {
+        isMuted = !isMuted;
+        document.getElementById('soundToggleBtn').innerText = isMuted ? '🔇' : '🔊';
+        
+        if (isMuted) {
+            sndBgm.pause(); // 끄면 즉시 BGM 정지
+        } else if (isGameStarted && !isGameOver) {
+            sndBgm.play().catch(()=>{}); // 켜면 다시 BGM 재생
+        }
+    }
+
     function toggleRoomCodeVisibility() {
         isRoomCodeHidden = !isRoomCodeHidden;
         const codeEl = document.getElementById('waitRoomCode');
@@ -384,10 +406,12 @@
         panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
     }
 
-    function playSound(audioObj) {
-        if (!audioObj || audioObj.volume === 0) return;
-        audioObj.currentTime = 0;
-        audioObj.play().catch(err => console.warn("재생 실패:", err));
+    function playSound(snd) {
+        if (isMuted) return; // 💡 음소거 상태면 소리를 재생하지 않고 종료!
+        try {
+            snd.currentTime = 0;
+            snd.play().catch(e => console.log(e));
+        } catch(e) {}
     }
 
     updateVolume(); // 시작 시 볼륨 초기화 적용
@@ -649,6 +673,7 @@
     // 💡 [신규] 브라우저의 음악 차단을 우회하여 첫 클릭 시 무조건 재생시키는 함수
     // 💡 [교체] 브라우저의 오디오 차단으로 인한 자바스크립트 크래시를 100% 방지하는 우회 함수
     function playBgmSafely() {
+        if (isMuted) return; // 💡 음소거 상태면 소리를 재생하지 않고 종료!
         try {
             sndBgm.currentTime = 0;
             const playPromise = sndBgm.play();
@@ -672,7 +697,8 @@
         isGameStarted = true;
         isGameOver = false;
         gameHistory = []; 
-        
+        lastMove = null;
+
         document.getElementById('waitingRoomScreen').style.display = 'none';
         document.getElementById('gameContainer').style.display = 'block';
 
@@ -859,6 +885,17 @@
             announce.innerHTML = `🎉 승리: ${finalWinnerName} !`;
         }
 
+        // 💡 [신규] 내가 이겼거나, 게임 자체가 끝났을 때의 화려한 마무리 폭죽!
+        // (내가 관전자가 아니면서 승리자이거나, 관전자일 땐 그냥 승리 축하용으로 터뜨려줌)
+        if (myPlayerNumber === gameWinner || myPlayerNumber === 0) {
+            confetti({
+                particleCount: 150,
+                spread: 80,
+                origin: { y: 0.6 }, // 화면 중간쯤에서 터짐
+                colors: ['#f39c12', '#e74c3c', '#3498db', '#2ecc71']
+            });
+        }
+
         document.getElementById('gameOverScreen').style.display = 'flex';
     }
 
@@ -907,15 +944,15 @@
         const cells = document.querySelectorAll('.cell');
         cells.forEach(cell => {
             const r = parseInt(cell.dataset.row); const c = parseInt(cell.dataset.col);
-            const val = tempBoard[r][c];
+            const val = tempBoard[r][c]; const bigBox = getBoxFromRowCol(r, c);
+        
             cell.innerText = val !== 0 ? val : '';
-            cell.classList.remove('hoverable', 'highlight-box');
-            
-            // i 변수를 찾지 못하던 에러 대신, 밖에서 안전하게 찾은 lastMove를 비교합니다.
+            cell.classList.remove('hoverable', 'highlight-box', 'last-move'); // 💡 'last-move' 삭제 추가
+            cell.style.backgroundColor = "transparent";
+
+            // 💡 [신규] 여기가 방금 둔 곳이라면 노란색 테두리와 불빛 효과 켜기!
             if (lastMove && lastMove.row === r && lastMove.col === c) {
-                cell.style.backgroundColor = "rgba(46, 125, 50, 0.3)";
-            } else {
-                cell.style.backgroundColor = "transparent";
+                cell.classList.add('last-move');
             }
         });
 
@@ -1141,6 +1178,9 @@
         if (data.move && !data.move.isOpening) {
             gameHistory.push(data.move); // 한 수 둘 때마다 배열에 턴 기록 저장
             
+            // 💡 [신규] 방금 둔 곳의 위치를 기억합니다.
+            lastMove = { row: data.move.row, col: data.move.col };
+
             // 만약 관전자가 과거를 보지 않고 라이브 시청 중이라면, 최신 화면으로 자동 동기화
             if (myPlayerNumber === 0 && !isSpectatorReviewMode) {
                 spectatorCurrentStep = gameHistory.length;
