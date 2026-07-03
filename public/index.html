@@ -117,11 +117,20 @@
         .chat-input { flex: 1; border: none; padding: 10px; font-size: 22px; outline: none; background: transparent; }
         .btn-chat-send { background: #34495e; color: white; border: none; padding: 0 15px; font-size: 20px; cursor: pointer; border-radius: 0 0 6px 0; }
         /* 💡 [신규] 마지막으로 둔 칸을 눈에 띄게 강조하는 스타일 */
-        .last-move { background-color: #fff9c4 !important; outline: 3px solid #f39c12; outline-offset: -2px; z-index: 5; transition: all 0.3s; box-shadow: 0 0 10px rgba(243, 156, 18, 0.5); }
+        .last-move { 
+            outline: 4px solid #ff9800 !important; 
+            outline-offset: -3px; 
+            z-index: 10; 
+            animation: pulse-orange 1.5s infinite;
+        }
+        @keyframes pulse-orange {
+            0% { box-shadow: 0 0 0 0 rgba(255, 152, 0, 0.7); }
+            70% { box-shadow: 0 0 0 8px rgba(255, 152, 0, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 152, 0, 0); }
+        }
     </style>
 </head>
 <body>
-    <button id="soundToggleBtn" onclick="toggleSound()" style="position: fixed; top: 15px; right: 15px; font-size: 24px; background: white; border: 2px solid #ccc; border-radius: 50%; width: 45px; height: 45px; cursor: pointer; z-index: 2000; box-shadow: 0 2px 5px rgba(0,0,0,0.2);">🔊</button>
     <button class="audio-control-btn" onclick="toggleAudioPanel()">🔊 소리 설정</button>
     <div class="audio-panel" id="audioPanel">
         <label>
@@ -334,6 +343,17 @@
     </div>
 </div>
 
+<div id="spectatorReviewControls" style="display: none; margin-top: 15px; background: #e3f2fd; padding: 10px; border-radius: 8px; border: 2px dashed #1976d2;">
+    <div style="font-size: 22px; font-weight: bold; color: #0d47a1; margin-bottom: 5px; text-align: center;">🔎 실시간 복기 모드</div>
+    <div style="display: flex; justify-content: center; gap: 8px; align-items: center; flex-wrap: wrap;">
+        <button class="btn-small" style="background: #1976d2; color: white;" onclick="stepSpectatorReplay(-1)">◀ 이전 수</button>
+        <span id="specReplayStatus" style="font-size: 22px; font-weight: bold; color: #333;">라이브 중</span>
+        <button class="btn-small" style="background: #1976d2; color: white;" onclick="stepSpectatorReplay(1)">다음 수 ▶</button>
+        <button class="btn-small" style="background: #2e7d32; color: white;" id="specLiveBtn" onclick="returnToLiveSpectate()">🔴 라이브 보기</button>
+        <button class="btn-small" style="background: #e74c3c; color: white;" id="showResultBtn" onclick="showGameOverScreenAgain()" style="display: none;">🏆 결과창 보기</button>
+    </div>
+</div>
+
 <script>
     // 이 아래부터 기존의 <script> 코드가 시작됩니다.
     const socket = io();
@@ -360,12 +380,17 @@
     // 💡 [신규] 사운드 켜기/끄기 토글 함수
     function toggleSound() {
         isMuted = !isMuted;
-        document.getElementById('soundToggleBtn').innerText = isMuted ? '🔇' : '🔊';
         
+        // 화면상에 존재하는 모든 오디오 토글 버튼들의 텍스트를 동기화합니다.
+        const muteBtns = document.querySelectorAll('.btn-mute, #muteBtn');
+        muteBtns.forEach(btn => {
+            btn.innerText = isMuted ? "🔇 소리 켜기" : "🔊 소리 끄기";
+        });
+
         if (isMuted) {
-            sndBgm.pause(); // 끄면 즉시 BGM 정지
+            sndBgm.pause();
         } else if (isGameStarted && !isGameOver) {
-            sndBgm.play().catch(()=>{}); // 켜면 다시 BGM 재생
+            sndBgm.play().catch(()=>{});
         }
     }
 
@@ -1015,8 +1040,14 @@
             const val = board[r][c]; const bigBox = getBoxFromRowCol(r, c);
             
             cell.innerText = val !== 0 ? val : '';
-            cell.classList.remove('hoverable', 'highlight-box');
+            // 💡 핵심 수정: 매 화면 갱신 때마다 이전 테두리를 깨끗이 지우고
+            cell.classList.remove('hoverable', 'highlight-box', 'last-move');
             cell.style.backgroundColor = "transparent";
+
+            // 💡 핵심 수정: 방금 둔 수가 존재한다면 주황색 테두리 클래스를 찰떡같이 입혀줍니다!
+            if (lastMove && lastMove.row === r && lastMove.col === c) {
+                cell.classList.add('last-move');
+            }
 
             if (isGameStarted && val === 0 && !isGameOver && !isOpeningPhase && currentPlayer === myPlayerNumber) {
                 if (requiredNextBox === null || bigBox === requiredNextBox) {
@@ -1231,13 +1262,24 @@
         renderVirtualBoardToStep(gameHistory.length); 
     }
 
-    // 💡 [신규] 게임 종료 후 당사자들이 🔎복기하기 버튼을 눌렀을 때 실행되는 함수
     function startReviewMode() {
-        document.getElementById('gameOverScreen').style.display = 'none'; // 결과창 숨기기
-        document.getElementById('spectatorReviewControls').style.display = 'block'; // 복기 패널 켜기
+        document.getElementById('gameOverScreen').style.display = 'none'; 
+        document.getElementById('spectatorReviewControls').style.display = 'block'; 
+        
+        // 플레이어가 복기 중일 때는 '라이브 보기'가 의미 없으므로 숨기고, 결과창 유턴 버튼을 보여줍니다.
+        if (myPlayerNumber !== 0) {
+            document.getElementById('specLiveBtn').style.display = 'none';
+            document.getElementById('showResultBtn').style.display = 'inline-block';
+        }
         
         spectatorCurrentStep = gameHistory.length;
-        stepSpectatorReplay(0); // 최신 상태에서 복기 시작
+        renderVirtualBoardToStep(spectatorCurrentStep);
+        document.getElementById('specReplayStatus').innerText = `🔎 복기 중 (${spectatorCurrentStep}/${gameHistory.length} 턴)`;
+    }
+
+    // 💡 [3번 신규] 복기를 하다가 언제든 다시 결과창(홈으로 가기, 대기실 가기 버튼 등)을 띄워주는 함수
+    function showGameOverScreenAgain() {
+        document.getElementById('gameOverScreen').style.display = 'flex';
     }
 
     // 💡 [핵심 복구 2] 증발했던 게임 초기화 및 숫자패드 호출 함수 부활!
