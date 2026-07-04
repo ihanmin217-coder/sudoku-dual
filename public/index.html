@@ -261,7 +261,17 @@
             <button class="btn-small" style="background: #1976d2; color: white;" onclick="stepSpectatorReplay(-1)">◀ 이전 수</button>
             <span id="specReplayStatus" style="font-size: 22px; font-weight: bold; color: #333;">라이브 중</span>
             <button class="btn-small" style="background: #1976d2; color: white;" onclick="stepSpectatorReplay(1)">다음 수 ▶</button>
-            <button class="btn-small" style="background: #2e7d32; color: white;" onclick="returnToLiveSpectate()">🔴 라이브 보기</button>
+            <button class="btn-small" style="background: #2e7d32; color: white;" id="specLiveBtn" onclick="returnToLiveSpectate()">🔴 라이브 보기</button>
+        </div>
+    </div>
+
+    <div id="playerReviewControls" style="display: none; margin-top: 15px; background: #fff3e0; padding: 10px; border-radius: 8px; border: 2px dashed #e67e22;">
+        <div style="font-size: 22px; font-weight: bold; color: #d35400; margin-bottom: 5px; text-align: center;">🏆 게임 종료 후 복기 모드</div>
+        <div style="display: flex; justify-content: center; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <button class="btn-small" style="background: #e67e22; color: white;" onclick="stepSpectatorReplay(-1)">◀ 이전 수</button>
+            <span id="playerReplayStatus" style="font-size: 22px; font-weight: bold; color: #333;">복기 중</span>
+            <button class="btn-small" style="background: #e67e22; color: white;" onclick="stepSpectatorReplay(1)">다음 수 ▶</button>
+            <button class="btn-small" style="background: #c0392b; color: white;" onclick="showGameOverScreenAgain()">🏆 결과창 보기</button>
         </div>
     </div>
 
@@ -340,17 +350,6 @@
             • 도움: Google Gemini
         </div>
         <button class="btn-main" style="background-color: #7f8c8d; margin-top: 25px;" onclick="closeCreditsModal()">닫기</button>
-    </div>
-</div>
-
-<div id="spectatorReviewControls" style="display: none; margin-top: 15px; background: #e3f2fd; padding: 10px; border-radius: 8px; border: 2px dashed #1976d2;">
-    <div style="font-size: 22px; font-weight: bold; color: #0d47a1; margin-bottom: 5px; text-align: center;">🔎 실시간 복기 모드</div>
-    <div style="display: flex; justify-content: center; gap: 8px; align-items: center; flex-wrap: wrap;">
-        <button class="btn-small" style="background: #1976d2; color: white;" onclick="stepSpectatorReplay(-1)">◀ 이전 수</button>
-        <span id="specReplayStatus" style="font-size: 22px; font-weight: bold; color: #333;">라이브 중</span>
-        <button class="btn-small" style="background: #1976d2; color: white;" onclick="stepSpectatorReplay(1)">다음 수 ▶</button>
-        <button class="btn-small" style="background: #2e7d32; color: white;" id="specLiveBtn" onclick="returnToLiveSpectate()">🔴 라이브 보기</button>
-        <button class="btn-small" style="background: #e74c3c; color: white;" id="showResultBtn" onclick="showGameOverScreenAgain()">🏆 결과창 보기</button>
     </div>
 </div>
 
@@ -753,31 +752,30 @@
         updateUI();      
     });
 
-    // 💡 [교체] 오프닝 종료 전환 엇박자를 완벽하게 해결한 moveApproved 수신부
+    // 💡 [교체] 오프닝 에러(버그 1)와 타이밍을 완벽하게 교정한 moveApproved
     socket.on('moveApproved', (data) => {
         if (data.move) {
+            // 🛡️ 오프닝 숫자일 때는 좌표(row, col)가 없으므로 보드판을 그리지 않습니다!
             if (!data.move.isOpening) {
                 gameHistory.push(data.move);
+                board[data.move.row][data.move.col] = data.move.number;
+                lastMove = { row: data.move.row, col: data.move.col };
+                
                 if (myPlayerNumber === 0 && !isSpectatorReviewMode) {
                     spectatorCurrentStep = gameHistory.length;
                 }
             }
             
-            board[data.move.row][data.move.col] = data.move.number;
-            lastMove = { row: data.move.row, col: data.move.col };
-            
             currentPlayer = data.nextPlayer;
             requiredNextBox = data.requiredNextBox;
             isFirstTurn = data.isFirstTurn;
-            isOpeningPhase = data.isOpeningPhase; // 서버의 최신 오프닝 상태(false) 동기화
+            isOpeningPhase = data.isOpeningPhase;
             openingNumber = data.openingNumber;
 
-            // 🛡️ 오프닝 페이즈가 방금 종료되었다면 클라이언트 스위치도 강제로 동기화 해제합니다.
             if (data.move.isOpening || !isOpeningPhase) {
                 isOpeningPhase = false; 
             }
 
-            // 확실하게 락을 풀고 하이라이트 칸(hoverable)을 그려줍니다.
             updateUI();
             
             if (data.move.number !== 0) {
@@ -1060,16 +1058,19 @@
 
         const isMyTurn = (currentPlayer === myPlayerNumber);
         
-        // 변경된 ID(turnIndicator, inGameSurrenderBtn)로 안전하게 연결합니다.
         const turnEl = document.getElementById('turnIndicator');
         const surrenderBtn = document.getElementById('inGameSurrenderBtn');
 
         if (myPlayerNumber === 0) {
             if (turnEl) turnEl.innerText = `👀 관전 중 (현재 턴: ${playerNames[currentPlayer]})`;
-            if (surrenderBtn) surrenderBtn.disabled = true;
+            if (surrenderBtn) surrenderBtn.style.display = 'none'; // 관전자에게 숨김
         } else {
             if (turnEl) turnEl.innerText = isMyTurn ? `🟢 나의 턴 (${playerNames[currentPlayer]})` : `🔴 상대방 대기 중...`;
-            if (surrenderBtn) surrenderBtn.disabled = isGameOver || isOpeningPhase || !isMyTurn;
+            if (surrenderBtn) {
+                // 💡 [버그 해결] 게임이 종료되면 항복 버튼을 화면에서 완전히 치워버립니다.
+                surrenderBtn.style.display = isGameOver ? 'none' : 'block';
+                surrenderBtn.disabled = isOpeningPhase || !isMyTurn;
+            }
         }
 
         const hintEl = document.getElementById('hintText');
@@ -1202,22 +1203,6 @@
     let isSpectatorReviewMode = false;
     let spectatorCurrentStep = 0;
 
-    // 대결 유저들이 한 수 둘 때마다 역사 기록(gameHistory)에 자동 누적하는 장치 보완
-    socket.on('moveApproved', (data) => {
-        // 기존 렌더링 코드 실행 후 기록 저장
-        if (data.move && !data.move.isOpening) {
-            gameHistory.push(data.move); // 한 수 둘 때마다 배열에 턴 기록 저장
-            
-            // 💡 [신규] 방금 둔 곳의 위치를 기억합니다.
-            lastMove = { row: data.move.row, col: data.move.col };
-
-            // 만약 관전자가 과거를 보지 않고 라이브 시청 중이라면, 최신 화면으로 자동 동기화
-            if (myPlayerNumber === 0 && !isSpectatorReviewMode) {
-                spectatorCurrentStep = gameHistory.length;
-            }
-        }
-    });
-
     // 버튼 클릭 시 이전/다음 수로 보드판 스냅샷 이동
     function stepSpectatorReplay(dir) {
         if (gameHistory.length === 0) return alert('아직 진행된 턴이 없습니다!');
@@ -1227,9 +1212,11 @@
         if (spectatorCurrentStep < 0) spectatorCurrentStep = 0;
         if (spectatorCurrentStep > gameHistory.length) spectatorCurrentStep = gameHistory.length;
 
-        document.getElementById('specReplayStatus').innerText = `🔎 복기 중 (${spectatorCurrentStep}/${gameHistory.length} 턴)`;
+        const statusText = `🔎 복기 중 (${spectatorCurrentStep}/${gameHistory.length} 턴)`;
+        if(document.getElementById('specReplayStatus')) document.getElementById('specReplayStatus').innerText = statusText;
+        if(document.getElementById('playerReplayStatus')) document.getElementById('playerReplayStatus').innerText = statusText;
 
-        // 빈 보드판을 가상으로 만들고 특정 턴까지 재현해서 화면을 그려줍니다.
+        playSound(sndPencil); // 넘길 때 소리 추가
         renderVirtualBoardToStep(spectatorCurrentStep);
     }
 
@@ -1279,17 +1266,23 @@
 
     function startReviewMode() {
         document.getElementById('gameOverScreen').style.display = 'none'; 
-        document.getElementById('spectatorReviewControls').style.display = 'block'; 
         
-        // 플레이어가 복기 중일 때는 '라이브 보기'가 의미 없으므로 숨기고, 결과창 유턴 버튼을 보여줍니다.
+        // 당사자(플레이어)는 주황색 전용 패널을, 관전자는 파란색 패널을 사용합니다.
         if (myPlayerNumber !== 0) {
-            document.getElementById('specLiveBtn').style.display = 'none';
-            document.getElementById('showResultBtn').style.display = 'inline-block';
+            document.getElementById('playerReviewControls').style.display = 'block';
+            document.getElementById('spectatorReviewControls').style.display = 'none';
+        } else {
+            document.getElementById('spectatorReviewControls').style.display = 'block';
+            document.getElementById('specLiveBtn').style.display = 'none'; // 끝났으니 라이브 버튼 숨김
         }
         
         spectatorCurrentStep = gameHistory.length;
         renderVirtualBoardToStep(spectatorCurrentStep);
-        document.getElementById('specReplayStatus').innerText = `🔎 복기 중 (${spectatorCurrentStep}/${gameHistory.length} 턴)`;
+        
+        // 상태 텍스트 양쪽 모두 갱신
+        const statusText = `🔎 복기 중 (${spectatorCurrentStep}/${gameHistory.length} 턴)`;
+        if(document.getElementById('specReplayStatus')) document.getElementById('specReplayStatus').innerText = statusText;
+        if(document.getElementById('playerReplayStatus')) document.getElementById('playerReplayStatus').innerText = statusText;
     }
 
     // 💡 [3번 신규] 복기를 하다가 언제든 다시 결과창(홈으로 가기, 대기실 가기 버튼 등)을 띄워주는 함수
