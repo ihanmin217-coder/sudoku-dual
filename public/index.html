@@ -128,6 +128,22 @@
             70% { box-shadow: 0 0 0 8px rgba(255, 152, 0, 0); }
             100% { box-shadow: 0 0 0 0 rgba(255, 152, 0, 0); }
         }
+        /* 💡 [버그 3 해결] 힌트 텍스트 한 줄 고정 및 스도쿠 칸 크기 절대 고정 */
+        #hintText {
+            white-space: nowrap; 
+            overflow: hidden; 
+            text-overflow: ellipsis; 
+            width: 100%; 
+            line-height: 1.2;
+        }
+        .cell {
+            box-sizing: border-box !important;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0; padding: 0;
+        }
     </style>
 </head>
 <body>
@@ -933,11 +949,28 @@
     }
 
     function startReviewMode() {
-        isReviewMode = true;
-        currentReplayStep = gameHistory.length; 
-        document.getElementById('gameOverScreen').style.display = 'none';
-        document.getElementById('reviewControls').style.display = 'flex';
-        renderReplayBoard();
+        // 결과창을 단순히 숨기는 것을 넘어, 마우스 클릭을 방해하지 못하도록 완전히 꺼버립니다.
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        gameOverScreen.style.display = 'none'; 
+        gameOverScreen.style.pointerEvents = 'none'; // 🛡️ 투명 벽 제거!
+
+        isReviewMode = true; // 화면이 강제로 갱신되는 것을 막음
+        
+        if (myPlayerNumber !== 0) {
+            document.getElementById('playerReviewControls').style.display = 'block';
+            document.getElementById('spectatorReviewControls').style.display = 'none';
+        } else {
+            document.getElementById('spectatorReviewControls').style.display = 'block';
+            if (document.getElementById('specLiveBtn')) document.getElementById('specLiveBtn').style.display = 'none'; 
+            if (document.getElementById('specResultBtn')) document.getElementById('specResultBtn').style.display = 'inline-block';
+        }
+        
+        spectatorCurrentStep = gameHistory.length;
+        renderVirtualBoardToStep(spectatorCurrentStep);
+        
+        const statusText = `🔎 복기 중 (${spectatorCurrentStep}/${gameHistory.length} 턴)`;
+        if(document.getElementById('specReplayStatus')) document.getElementById('specReplayStatus').innerText = statusText;
+        if(document.getElementById('playerReplayStatus')) document.getElementById('playerReplayStatus').innerText = statusText;
     }
 
     function changeReplayStep(delta) {
@@ -1301,17 +1334,41 @@
 
     // 💡 [3번 신규] 복기를 하다가 언제든 다시 결과창(홈으로 가기, 대기실 가기 버튼 등)을 띄워주는 함수
     function showGameOverScreenAgain() {
-        document.getElementById('gameOverScreen').style.display = 'flex';
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        gameOverScreen.style.display = 'flex';
+        gameOverScreen.style.pointerEvents = 'auto'; // 🛡️ 마우스 클릭 기능 다시 활성화!
     }
 
     // 💡 [핵심 복구 2] 증발했던 게임 초기화 및 숫자패드 호출 함수 부활!
+    // 💡 [버그 1 해결] 보드판 초기화 및 '첫 턴 즉시 배치' 클릭 이벤트 완벽 적용
     function initBoard() {
         board = Array.from({length: 9}, () => Array(9).fill(0));
         const cells = document.querySelectorAll('.cell');
+        
         cells.forEach(cell => {
             cell.innerText = '';
             cell.style.backgroundColor = "transparent";
-            cell.classList.remove('hoverable', 'highlight-box');
+            cell.classList.remove('hoverable', 'highlight-box', 'last-move');
+            
+            // 🛡️ 기존 클릭 이벤트를 초기화하고 새로운 규칙을 부여합니다.
+            cell.onclick = function() {
+                if (!isGameStarted || isGameOver || isOpeningPhase || currentPlayer !== myPlayerNumber) return;
+                
+                const r = parseInt(this.dataset.row);
+                const c = parseInt(this.dataset.col);
+                if (board[r][c] !== 0) return; // 이미 숫자가 있으면 무시
+
+                const bigBox = getBoxFromRowCol(r, c);
+                if (requiredNextBox !== null && bigBox !== requiredNextBox) return; // 제약 조건 위반 무시
+
+                // 🌟 핵심: 첫 번째 턴이라면 숫자 패드를 띄우지 않고, 즉시 서버로 배치 신호를 보냅니다!
+                if (isFirstTurn) {
+                    socket.emit('placeNumber', { roomCode: currentRoomCode, row: r, col: c, number: openingNumber });
+                } else {
+                    // 일반 턴이라면 기존처럼 숫자 패드를 엽니다. (함수 이름이 openNumpadModal 이 맞는지 확인하세요)
+                    openNumpadModal(false, r, c); 
+                }
+            };
         });
         
         isOpeningPhase = true;
@@ -1319,9 +1376,8 @@
         currentPlayer = 1;
         requiredNextBox = null;
 
-        // 게임 시작 시 2P(대결상대) 화면에만 숫자 패드를 띄워서 오프닝 숫자를 고르게 합니다.
         if (myPlayerNumber === 2) {
-            openNumpadModal(true);
+            openNumpadModal(true); // 2P에게만 오프닝 패드 띄우기
         }
     }
 </script>
