@@ -769,10 +769,13 @@
         updateUI();      
     });
 
-    // 💡 [버그 1 & 2 완벽 해결] 첫 턴 보장 및 강제 턴 넘기기 로직 장착!
+    // 💡 [버그 2 해결] 직전 숫자를 다음 턴의 강제 칸으로 묶어버리는 룰 엔진 적용!
     socket.on('moveApproved', (data) => {
         if (data.move) {
-            if (!data.move.isOpening) {
+            // 1. 데이터 저장 및 오프닝 숫자 확실하게 포획
+            if (data.move.isOpening) {
+                openingNumber = data.move.number; // 오프닝 숫자를 완벽하게 기억합니다.
+            } else {
                 gameHistory.push(data.move);
                 board[data.move.row][data.move.col] = data.move.number;
                 lastMove = { row: data.move.row, col: data.move.col };
@@ -782,17 +785,16 @@
                 }
             }
             
-            // 🛡️ [버그 2 해결] 서버가 다음 턴 플레이어를 명확히 안 줘도, 클라이언트가 알아서 턴을 바꿈!
+            // 2. 턴 교대 로직
             if (data.nextPlayer !== undefined && data.nextPlayer !== null) {
                 currentPlayer = data.nextPlayer;
             } else if (data.move && data.move.isOpening) {
-                currentPlayer = 1; // 오프닝 끝났으니 무조건 1P
+                currentPlayer = 1; 
             } else {
-                // 일반 턴이라면 1 <-> 2 로 강제로 뒤집습니다.
                 currentPlayer = currentPlayer === 1 ? 2 : 1;
             }
 
-            // 🛡️ [버그 1 해결] 오프닝 페이즈가 끝난 바로 직후의 턴은, 무조건 '첫 번째 턴'이어야 합니다!
+            // 3. 턴 상태 동기화
             if (data.move.isOpening) {
                 isFirstTurn = true;
             } else if (data.isFirstTurn !== undefined) {
@@ -801,14 +803,35 @@
                 isFirstTurn = false;
             }
 
-            requiredNextBox = data.requiredNextBox !== undefined ? data.requiredNextBox : null;
-
             if (data.move.isOpening || !data.isOpeningPhase) {
                 isOpeningPhase = false; 
             } else if (data.isOpeningPhase !== undefined) {
                 isOpeningPhase = data.isOpeningPhase;
             }
 
+            // 🛡️ 4. 대망의 코어 룰 엔진: 클라이언트가 직접 다음 제약 칸(requiredNextBox)을 계산합니다!
+            if (!data.move.isOpening && !isFirstTurn) {
+                const nextBox = data.move.number; // 방금 둔 숫자가 다음 박스 번호가 됨
+                
+                // 해당 큰 칸(3x3)이 꽉 찼는지 검사
+                let isFull = true;
+                const sr = Math.floor((nextBox - 1) / 3) * 3;
+                const sc = ((nextBox - 1) % 3) * 3;
+                
+                for (let r = sr; r < sr + 3; r++) {
+                    for (let c = sc; c < sc + 3; c++) {
+                        if (board[r][c] === 0) { isFull = false; break; }
+                    }
+                }
+                
+                // 꽉 찼으면 족쇄를 풀고 프리 턴(null) 부여, 빈칸이 있으면 강제 귀속!
+                requiredNextBox = isFull ? null : nextBox;
+            } else {
+                // 오프닝 페이즈거나 선공의 첫 턴일 때는 제약 조건 없이 무조건 프리 턴
+                requiredNextBox = null;
+            }
+
+            // 5. 화면 갱신 및 후처리
             updateUI();
             if (data.move.number !== 0) playSound(sndPencil);
             startTimer();
@@ -1350,8 +1373,6 @@
         gameOverScreen.style.pointerEvents = 'auto'; // 🛡️ 마우스 클릭 기능 다시 활성화!
     }
 
-    // 💡 [핵심 복구 2] 증발했던 게임 초기화 및 숫자패드 호출 함수 부활!
-    // 💡 [버그 1 해결] 보드판 초기화 및 '첫 턴 즉시 배치' 클릭 이벤트 완벽 적용
     function initBoard() {
         board = Array.from({length: 9}, () => Array(9).fill(0));
         const cells = document.querySelectorAll('.cell');
@@ -1361,8 +1382,27 @@
             cell.style.backgroundColor = "transparent";
             cell.classList.remove('hoverable', 'highlight-box', 'last-move');
             
-            // 기존에 에러를 유발하던 cell.onclick = function() {...} 덩어리 전체 삭제
-            cell.onclick = null; 
+            cell.onclick = function() {
+                if (!isGameStarted || isGameOver || isOpeningPhase || currentPlayer !== myPlayerNumber) return;
+                
+                const r = parseInt(this.dataset.row);
+                const c = parseInt(this.dataset.col);
+                if (board[r][c] !== 0) return; // 이미 숫자가 있으면 무시
+
+                const bigBox = getBoxFromRowCol(r, c);
+                if (requiredNextBox !== null && bigBox !== requiredNextBox) return; // 제약 조건 위반 무시
+
+                if (isFirstTurn) {
+                    // 🛡️ 엉뚱한 placeNumber 대신, 정확한 playerMove 신호와 패키지 구조로 보냅니다!
+                    socket.emit('playerMove', { 
+                        roomCode: currentRoomCode, 
+                        move: { row: r, col: c, number: openingNumber, bigBox: bigBox } 
+                    });
+                } else {
+                    selectedRow = r; selectedCol = c;
+                    openNumpadModal(false, r, c); 
+                }
+            };
         });
         
         isOpeningPhase = true;
@@ -1371,7 +1411,7 @@
         requiredNextBox = null;
 
         if (myPlayerNumber === 2) {
-            openNumpadModal(true); // 2P에게만 오프닝 패드 띄우기
+            openNumpadModal(true); 
         }
     }
 </script>
