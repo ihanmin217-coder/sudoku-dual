@@ -292,12 +292,12 @@
         </div>
     </div>
 
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; width: 100%; max-width: 460px; margin-left: auto; margin-right: auto; position: relative; z-index: 9999;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; width: 100%; max-width: 460px; margin-left: auto; margin-right: auto; position: relative; z-index: 101;">
         <button id="inGameSurrenderBtn" onclick="surrender()" style="font-size: 20px; background: #e74c3c; color: white; border: 3px solid #333; border-radius: 8px; padding: 8px 15px; cursor: pointer; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">🏳️ 기권하기</button>
 
         <div style="position: relative;">
             <button onclick="toggleEmoticonPanel()" style="font-size: 24px; background: #fcf8eb; border: 3px solid #333; border-radius: 50%; width: 50px; height: 50px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">💬</button>
-            <div class="emoticon-panel" id="emoticonPanel" style="position: absolute; bottom: 60px; right: 0; z-index: 10000; width: 220px; display: none;">
+            <div class="emoticon-panel" id="emoticonPanel" style="position: absolute; bottom: 60px; right: 0; z-index: 102; width: 220px; display: none;">
                 <button class="emoticon-btn" onclick="sendEmoticon('🤔')">🤔</button>
                 <button class="emoticon-btn" onclick="sendEmoticon('👏')">👏</button>
                 <button class="emoticon-btn" onclick="sendEmoticon('😭')">😭</button>
@@ -769,7 +769,7 @@
         updateUI();      
     });
 
-    // 💡 [버그 1 해결] 오프닝 이후 턴 배정이 증발하는 문제를 완벽하게 고친 코드
+    // 💡 [버그 1 & 2 완벽 해결] 첫 턴 보장 및 강제 턴 넘기기 로직 장착!
     socket.on('moveApproved', (data) => {
         if (data.move) {
             if (!data.move.isOpening) {
@@ -782,20 +782,31 @@
                 }
             }
             
-            // 🛡️ 핵심 수정: 서버가 nextPlayer를 빼먹었더라도, 오프닝 직후라면 무조건 1P로 고정!
+            // 🛡️ [버그 2 해결] 서버가 다음 턴 플레이어를 명확히 안 줘도, 클라이언트가 알아서 턴을 바꿈!
             if (data.nextPlayer !== undefined && data.nextPlayer !== null) {
                 currentPlayer = data.nextPlayer;
             } else if (data.move && data.move.isOpening) {
-                currentPlayer = 1; // 오프닝 끝났으니 1P 턴
+                currentPlayer = 1; // 오프닝 끝났으니 무조건 1P
+            } else {
+                // 일반 턴이라면 1 <-> 2 로 강제로 뒤집습니다.
+                currentPlayer = currentPlayer === 1 ? 2 : 1;
+            }
+
+            // 🛡️ [버그 1 해결] 오프닝 페이즈가 끝난 바로 직후의 턴은, 무조건 '첫 번째 턴'이어야 합니다!
+            if (data.move.isOpening) {
+                isFirstTurn = true;
+            } else if (data.isFirstTurn !== undefined) {
+                isFirstTurn = data.isFirstTurn;
+            } else {
+                isFirstTurn = false;
             }
 
             requiredNextBox = data.requiredNextBox !== undefined ? data.requiredNextBox : null;
-            isFirstTurn = data.isFirstTurn !== undefined ? data.isFirstTurn : false;
-            isOpeningPhase = data.isOpeningPhase !== undefined ? data.isOpeningPhase : false;
-            openingNumber = data.openingNumber !== undefined ? data.openingNumber : openingNumber;
 
-            if (data.move.isOpening || !isOpeningPhase) {
+            if (data.move.isOpening || !data.isOpeningPhase) {
                 isOpeningPhase = false; 
+            } else if (data.isOpeningPhase !== undefined) {
+                isOpeningPhase = data.isOpeningPhase;
             }
 
             updateUI();
@@ -1350,25 +1361,8 @@
             cell.style.backgroundColor = "transparent";
             cell.classList.remove('hoverable', 'highlight-box', 'last-move');
             
-            // 🛡️ 기존 클릭 이벤트를 초기화하고 새로운 규칙을 부여합니다.
-            cell.onclick = function() {
-                if (!isGameStarted || isGameOver || isOpeningPhase || currentPlayer !== myPlayerNumber) return;
-                
-                const r = parseInt(this.dataset.row);
-                const c = parseInt(this.dataset.col);
-                if (board[r][c] !== 0) return; // 이미 숫자가 있으면 무시
-
-                const bigBox = getBoxFromRowCol(r, c);
-                if (requiredNextBox !== null && bigBox !== requiredNextBox) return; // 제약 조건 위반 무시
-
-                // 🌟 핵심: 첫 번째 턴이라면 숫자 패드를 띄우지 않고, 즉시 서버로 배치 신호를 보냅니다!
-                if (isFirstTurn) {
-                    socket.emit('placeNumber', { roomCode: currentRoomCode, row: r, col: c, number: openingNumber });
-                } else {
-                    // 일반 턴이라면 기존처럼 숫자 패드를 엽니다. (함수 이름이 openNumpadModal 이 맞는지 확인하세요)
-                    openNumpadModal(false, r, c); 
-                }
-            };
+            // 기존에 에러를 유발하던 cell.onclick = function() {...} 덩어리 전체 삭제
+            cell.onclick = null; 
         });
         
         isOpeningPhase = true;
