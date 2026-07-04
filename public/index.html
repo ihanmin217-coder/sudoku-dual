@@ -753,9 +753,9 @@
     });
 
     // 💡 [교체] 오프닝 에러(버그 1)와 타이밍을 완벽하게 교정한 moveApproved
+    // 💡 [버그 1 해결] 서버에서 데이터가 오지 않아도 에러가 나지 않도록 강제 기본값(null)을 부여합니다.
     socket.on('moveApproved', (data) => {
         if (data.move) {
-            // 🛡️ 오프닝 숫자일 때는 좌표(row, col)가 없으므로 보드판을 그리지 않습니다!
             if (!data.move.isOpening) {
                 gameHistory.push(data.move);
                 board[data.move.row][data.move.col] = data.move.number;
@@ -767,10 +767,11 @@
             }
             
             currentPlayer = data.nextPlayer;
-            requiredNextBox = data.requiredNextBox;
-            isFirstTurn = data.isFirstTurn;
-            isOpeningPhase = data.isOpeningPhase;
-            openingNumber = data.openingNumber;
+            // 🛡️ undefined 방어막: 서버에서 값을 안 주면 안전하게 null과 false로 처리합니다!
+            requiredNextBox = data.requiredNextBox !== undefined ? data.requiredNextBox : null;
+            isFirstTurn = data.isFirstTurn !== undefined ? data.isFirstTurn : false;
+            isOpeningPhase = data.isOpeningPhase !== undefined ? data.isOpeningPhase : false;
+            openingNumber = data.openingNumber !== undefined ? data.openingNumber : openingNumber;
 
             if (data.move.isOpening || !isOpeningPhase) {
                 isOpeningPhase = false; 
@@ -870,43 +871,39 @@
         endGame(data.winnerRole, false, true);
     });
 
-    // 💡 [교체] 관전자 권한(0번) 데이터 미매칭 버그가 수정된 게임 오버 정산 함수
+    // 💡 [버그 2 해결] 어떤 자바스크립트 에러가 터져도 결과창은 반드시 뜨도록 철벽 방어막을 칩니다.
     function endGame(gameWinner, isSuffocated, isSurrendered) {
+        if (isGameOver) return; // 중복 실행 방지
         isGameOver = true;
         clearInterval(timerInterval);
         
-        try {
-            sndBgm.pause();
-            sndBgm.currentTime = 0;
-            playSound(sndGameOver);
-        } catch(e) { console.log("오디오 재생 생략됨"); }
+        try { sndBgm.pause(); sndBgm.currentTime = 0; playSound(sndGameOver); } catch(e) {}
 
-        updateUI();
-        const announce = document.getElementById('winnerAnounce');
+        updateUI(); // 이 시점에 채팅창 잠금도 풀려서 플레이어도 채팅이 가능해집니다!
         
-        // 🛡️ 관전자(0) 유저 리드가 오염되지 않도록, 공인 승리 주소값(gameWinner)으로 이름을 명확하게 강제 매칭합니다.
+        const announce = document.getElementById('winnerAnounce');
         const finalWinnerName = playerNames[gameWinner] || '우승자';
         
-        if (isSurrendered) {
-            announce.innerHTML = `🏃 상대방이 접속을 종료/기권했습니다!<br>🎉 승리: ${finalWinnerName}`;
-        } else if (isSuffocated) {
-            announce.innerHTML = `💀 더 이상 둘 곳이 없습니다 (질식)!<br>🎉 승리: ${finalWinnerName}`;
-        } else {
-            announce.innerHTML = `🎉 승리: ${finalWinnerName} !`;
+        if (announce) {
+            if (isSurrendered) {
+                announce.innerHTML = `🏃 누군가 기권/탈주했습니다!<br>🎉 승리: ${finalWinnerName}`;
+            } else if (isSuffocated) {
+                announce.innerHTML = `💀 더 이상 둘 곳이 없습니다 (질식)!<br>🎉 승리: ${finalWinnerName}`;
+            } else {
+                announce.innerHTML = `🎉 승리: ${finalWinnerName} !`;
+            }
         }
 
-        // 💡 [신규] 내가 이겼거나, 게임 자체가 끝났을 때의 화려한 마무리 폭죽!
-        // (내가 관전자가 아니면서 승리자이거나, 관전자일 땐 그냥 승리 축하용으로 터뜨려줌)
-        if (myPlayerNumber === gameWinner || myPlayerNumber === 0) {
-            confetti({
-                particleCount: 150,
-                spread: 80,
-                origin: { y: 0.6 }, // 화면 중간쯤에서 터짐
-                colors: ['#f39c12', '#e74c3c', '#3498db', '#2ecc71']
-            });
-        }
+        // 폭죽 이펙트가 시스템 오류로 작동하지 않아도 에러를 무시하고 넘어가게 만듭니다.
+        try {
+            if (typeof confetti !== 'undefined' && (myPlayerNumber === gameWinner || myPlayerNumber === 0)) {
+                confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 }, colors: ['#f39c12', '#e74c3c', '#3498db', '#2ecc71'] });
+            }
+        } catch(e) { console.warn("폭죽 에러 발생 무시"); }
 
-        document.getElementById('gameOverScreen').style.display = 'flex';
+        // 🛡️ 위에서 무슨 일이 있었든 간에, 결과창 팝업은 무조건 띄웁니다!
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        if (gameOverScreen) gameOverScreen.style.display = 'flex';
     }
 
     // 💡 [교체] 이동 시 오버레이 화면을 완벽하게 숨겨주는 대기실 복귀 함수
@@ -1027,8 +1024,8 @@
         }
     });
 
-    // 💡 [버그 픽스] 없는 HTML ID를 찾다가 게임이 멈추는 현상 100% 해결!
-    function updateUI() {
+   // 💡 [버그 3 & 요청 4 해결] 항복 버튼 잠금 영구 해제 및 플레이어 채팅창 잠금
+   function updateUI() {
         if (isReviewMode) return; 
 
         const cells = document.querySelectorAll('.cell');
@@ -1037,11 +1034,9 @@
             const val = board[r][c]; const bigBox = getBoxFromRowCol(r, c);
             
             cell.innerText = val !== 0 ? val : '';
-            // 💡 핵심 수정: 매 화면 갱신 때마다 이전 테두리를 깨끗이 지우고
             cell.classList.remove('hoverable', 'highlight-box', 'last-move');
             cell.style.backgroundColor = "transparent";
 
-            // 💡 핵심 수정: 방금 둔 수가 존재한다면 주황색 테두리 클래스를 찰떡같이 입혀줍니다!
             if (lastMove && lastMove.row === r && lastMove.col === c) {
                 cell.classList.add('last-move');
             }
@@ -1062,14 +1057,26 @@
         const surrenderBtn = document.getElementById('inGameSurrenderBtn');
 
         if (myPlayerNumber === 0) {
-            if (turnEl) turnEl.innerText = `👀 관전 중 (현재 턴: ${playerNames[currentPlayer]})`;
-            if (surrenderBtn) surrenderBtn.style.display = 'none'; // 관전자에게 숨김
+            if (turnEl) turnEl.innerText = `👀 관전 중 (현재 턴: ${playerNames[currentPlayer] || currentPlayer+'P'})`;
+            if (surrenderBtn) surrenderBtn.style.display = 'none'; 
         } else {
             if (turnEl) turnEl.innerText = isMyTurn ? `🟢 나의 턴 (${playerNames[currentPlayer]})` : `🔴 상대방 대기 중...`;
             if (surrenderBtn) {
-                // 💡 [버그 해결] 게임이 종료되면 항복 버튼을 화면에서 완전히 치워버립니다.
                 surrenderBtn.style.display = isGameOver ? 'none' : 'block';
-                surrenderBtn.disabled = isOpeningPhase || !isMyTurn;
+                // 🛡️ [버그 3 해결] 항복 버튼은 턴에 상관없이 무조건 누를 수 있게 잠금을 풉니다!
+                surrenderBtn.disabled = false; 
+            }
+        }
+
+        // 💡 [요청 4 적용] 플레이어는 게임 진행 중에 채팅을 칠 수 없게 입력창을 잠급니다. (관전자만 가능)
+        const chatInput = document.getElementById('gameChatInput');
+        if (chatInput) {
+            if (myPlayerNumber !== 0 && !isGameOver) {
+                chatInput.disabled = true;
+                chatInput.placeholder = "🤫 플레이어는 게임 중 채팅 금지 (관전자 전용)";
+            } else {
+                chatInput.disabled = false;
+                chatInput.placeholder = "실시간 대화 및 훈수 가능...";
             }
         }
 
@@ -1079,13 +1086,14 @@
                 hintEl.innerText = myPlayerNumber === 2 ? "⏳ [오프닝] 선공이 쓸 첫 숫자를 골라주세요." : "⏳ 상대방이 첫 숫자를 정하고 있습니다.";
             } else if (isFirstTurn) {
                 hintEl.innerText = isMyTurn ? `✨ 자유 구역. 원하는 빈칸에 [${openingNumber}] 기입.` : `상대방이 [${openingNumber}]를 배치 중입니다.`;
-            } else if (requiredNextBox !== null) {
+            } else if (requiredNextBox !== null && requiredNextBox !== undefined) {
                 hintEl.innerText = isMyTurn ? `💥 제약 조건: [${requiredNextBox}번 큰 칸] 내부에 숫자를 놓으세요.` : `상대방이 [${requiredNextBox}번 큰 칸]에 배치 중입니다.`;
             } else {
                 hintEl.innerText = isMyTurn ? "✨ 프리 턴: 빈칸을 자유롭게 클릭하세요." : "상대방이 프리 턴으로 배치 중입니다.";
             }
         }
     }
+
     // 💡 [신규] 크레딧 모달 열기/닫기 함수
     function openCreditsModal() {
         document.getElementById('creditsModal').style.display = 'flex';
@@ -1165,20 +1173,23 @@
         }
     }
 
-    // 💡 [신규] 대기실/인게임 통합 채팅 전송 함수
+    // 💡 [요청 4 적용] 플레이어가 엔터키를 쳐도 서버로 채팅이 전송되지 않도록 원천 차단
     function sendRoomChat(type) {
+        // 플레이어는 게임이 끝나기 전까지 절대로 채팅을 보낼 수 없습니다.
+        if (type === 'game' && myPlayerNumber !== 0 && !isGameOver) {
+            alert("게임 진행 중에는 플레이어가 채팅을 보낼 수 없습니다. (관전자 전용)");
+            return;
+        }
+
         const inputId = type === 'wait' ? 'waitChatInput' : 'gameChatInput';
         const inputEl = document.getElementById(inputId);
         const msg = inputEl.value.trim();
         
-        if (!msg) return; // 빈 메시지는 전송 차단
+        if (!msg) return;
 
         const myNickname = document.getElementById('nicknameInput').value || "익명";
-        
-        // 서버에 채팅 데이터 발송
         socket.emit('sendChatMessage', { roomCode: currentRoomCode, message: msg, nickname: myNickname });
-        
-        inputEl.value = ''; // 입력란 비우기
+        inputEl.value = ''; 
     }
 
     // 💡 [신규] 서버로부터 채팅을 받아 화면에 표시
