@@ -350,7 +350,7 @@
         <span id="specReplayStatus" style="font-size: 22px; font-weight: bold; color: #333;">라이브 중</span>
         <button class="btn-small" style="background: #1976d2; color: white;" onclick="stepSpectatorReplay(1)">다음 수 ▶</button>
         <button class="btn-small" style="background: #2e7d32; color: white;" id="specLiveBtn" onclick="returnToLiveSpectate()">🔴 라이브 보기</button>
-        <button class="btn-small" style="background: #e74c3c; color: white;" id="showResultBtn" onclick="showGameOverScreenAgain()" style="display: none;">🏆 결과창 보기</button>
+        <button class="btn-small" style="background: #e74c3c; color: white;" id="showResultBtn" onclick="showGameOverScreenAgain()">🏆 결과창 보기</button>
     </div>
 </div>
 
@@ -753,7 +753,7 @@
         updateUI();      
     });
 
-    // 💡 [교체] 최신 수가 오차 없이 즉시 주황색으로 빛나도록 순서를 교정한 moveApproved
+    // 💡 [교체] 오프닝 종료 전환 엇박자를 완벽하게 해결한 moveApproved 수신부
     socket.on('moveApproved', (data) => {
         if (data.move) {
             if (!data.move.isOpening) {
@@ -763,17 +763,21 @@
                 }
             }
             
-            // 🛡️ 중요: 먼저 보드판 데이터를 업데이트하고, 최신 lastMove 좌표를 확보한 뒤에!!
             board[data.move.row][data.move.col] = data.move.number;
             lastMove = { row: data.move.row, col: data.move.col };
             
             currentPlayer = data.nextPlayer;
             requiredNextBox = data.requiredNextBox;
             isFirstTurn = data.isFirstTurn;
-            isOpeningPhase = data.isOpeningPhase;
+            isOpeningPhase = data.isOpeningPhase; // 서버의 최신 오프닝 상태(false) 동기화
             openingNumber = data.openingNumber;
 
-            // 🛡️ 모든 데이터가 확실히 주머니에 들어온 '마지막 순간'에 화면을 그려야 제 타이밍에 빛납니다.
+            // 🛡️ 오프닝 페이즈가 방금 종료되었다면 클라이언트 스위치도 강제로 동기화 해제합니다.
+            if (data.move.isOpening || !isOpeningPhase) {
+                isOpeningPhase = false; 
+            }
+
+            // 확실하게 락을 풀고 하이라이트 칸(hoverable)을 그려줍니다.
             updateUI();
             
             if (data.move.number !== 0) {
@@ -907,17 +911,29 @@
         document.getElementById('gameOverScreen').style.display = 'flex';
     }
 
-    // 💡 [버그 방지] 대기실로 돌아갈 때 게임 진행 상태를 초기화해야 다음 버그가 안 생깁니다.
+    // 💡 [교체] 이동 시 오버레이 화면을 완벽하게 숨겨주는 대기실 복귀 함수
     function backToWaitingRoom() {
+        // 결과창 오버레이 팝업을 확실하게 꺼서 화면 가림을 막습니다.
+        document.getElementById('gameOverScreen').style.display = 'none';
+        
         document.getElementById('gameContainer').style.display = 'none';
         document.getElementById('waitingRoomScreen').style.display = 'block';
-        isGameStarted = false; // 필수 초기화
-        isGameOver = false;    // 필수 초기화
+        
+        isReviewMode = false;
+        isGameStarted = false;
     }
 
-    // 💡 [기능 1] 메인 로비로 돌아가기 (새로고침을 통해 깔끔하게 방에서 빠져나갑니다)
+    // 💡 [교체] 이동 시 오버레이 화면을 완벽하게 숨겨주는 메인 로비 복귀 함수
     function backToMainLobby() {
-        location.reload();
+        // 결과창 오버레이 팝업을 확실하게 꺼서 화면 가림을 막습니다.
+        document.getElementById('gameOverScreen').style.display = 'none';
+        
+        document.getElementById('gameContainer').style.display = 'none';
+        document.getElementById('lobbyScreen').style.display = 'block';
+        
+        currentRoomCode = '';
+        isReviewMode = false;
+        isGameStarted = false;
     }
 
     function startReviewMode() {
