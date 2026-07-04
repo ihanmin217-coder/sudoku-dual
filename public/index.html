@@ -257,11 +257,12 @@
 
     <div id="spectatorReviewControls" style="display: none; margin-top: 15px; background: #e3f2fd; padding: 10px; border-radius: 8px; border: 2px dashed #1976d2;">
         <div style="font-size: 22px; font-weight: bold; color: #0d47a1; margin-bottom: 5px; text-align: center;">🔎 실시간 복기 모드 (관전자 전용)</div>
-        <div style="display: flex; justify-content: center; gap: 10px; align-items: center;">
+        <div style="display: flex; justify-content: center; gap: 10px; align-items: center; flex-wrap: wrap;">
             <button class="btn-small" style="background: #1976d2; color: white;" onclick="stepSpectatorReplay(-1)">◀ 이전 수</button>
             <span id="specReplayStatus" style="font-size: 22px; font-weight: bold; color: #333;">라이브 중</span>
             <button class="btn-small" style="background: #1976d2; color: white;" onclick="stepSpectatorReplay(1)">다음 수 ▶</button>
             <button class="btn-small" style="background: #2e7d32; color: white;" id="specLiveBtn" onclick="returnToLiveSpectate()">🔴 라이브 보기</button>
+            <button class="btn-small" style="background: #e74c3c; color: white; display: none;" id="specResultBtn" onclick="showGameOverScreenAgain()">🏆 결과창 보기</button>
         </div>
     </div>
 
@@ -271,16 +272,16 @@
             <button class="btn-small" style="background: #e67e22; color: white;" onclick="stepSpectatorReplay(-1)">◀ 이전 수</button>
             <span id="playerReplayStatus" style="font-size: 22px; font-weight: bold; color: #333;">복기 중</span>
             <button class="btn-small" style="background: #e67e22; color: white;" onclick="stepSpectatorReplay(1)">다음 수 ▶</button>
-            <button class="btn-small" style="background: #c0392b; color: white;" onclick="showGameOverScreenAgain()">🏆 결과창 보기</button>
+            <button class="btn-small" style="background: #c0392b; color: white;" id="showResultBtn" onclick="showGameOverScreenAgain()">🏆 결과창 보기</button>
         </div>
     </div>
 
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; width: 100%; max-width: 460px; margin-left: auto; margin-right: auto;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; width: 100%; max-width: 460px; margin-left: auto; margin-right: auto; position: relative; z-index: 9999;">
         <button id="inGameSurrenderBtn" onclick="surrender()" style="font-size: 20px; background: #e74c3c; color: white; border: 3px solid #333; border-radius: 8px; padding: 8px 15px; cursor: pointer; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">🏳️ 기권하기</button>
 
         <div style="position: relative;">
             <button onclick="toggleEmoticonPanel()" style="font-size: 24px; background: #fcf8eb; border: 3px solid #333; border-radius: 50%; width: 50px; height: 50px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">💬</button>
-            <div class="emoticon-panel" id="emoticonPanel" style="position: absolute; bottom: 60px; right: 0; z-index: 102; width: 220px; display: none;">
+            <div class="emoticon-panel" id="emoticonPanel" style="position: absolute; bottom: 60px; right: 0; z-index: 10000; width: 220px; display: none;">
                 <button class="emoticon-btn" onclick="sendEmoticon('🤔')">🤔</button>
                 <button class="emoticon-btn" onclick="sendEmoticon('👏')">👏</button>
                 <button class="emoticon-btn" onclick="sendEmoticon('😭')">😭</button>
@@ -295,7 +296,7 @@
         </div>
     </div>
 
-    <div class="chat-container" style="margin: 15px auto 0; width: 100%; max-width: 460px;">
+    <div class="chat-container" id="inGameChatContainer" style="margin: 15px auto 0; width: 100%; max-width: 460px;">
         <div class="chat-messages" id="gameChatMessages" style="height: 100px;"></div>
         <div class="chat-input-area">
             <input type="text" id="gameChatInput" class="chat-input" placeholder="실시간 대화 및 훈수 가능..." onkeypress="if(event.keyCode==13) sendRoomChat('game')">
@@ -752,8 +753,7 @@
         updateUI();      
     });
 
-    // 💡 [교체] 오프닝 에러(버그 1)와 타이밍을 완벽하게 교정한 moveApproved
-    // 💡 [버그 1 해결] 서버에서 데이터가 오지 않아도 에러가 나지 않도록 강제 기본값(null)을 부여합니다.
+    // 💡 [버그 1 해결] 오프닝 이후 턴 배정이 증발하는 문제를 완벽하게 고친 코드
     socket.on('moveApproved', (data) => {
         if (data.move) {
             if (!data.move.isOpening) {
@@ -766,8 +766,13 @@
                 }
             }
             
-            currentPlayer = data.nextPlayer;
-            // 🛡️ undefined 방어막: 서버에서 값을 안 주면 안전하게 null과 false로 처리합니다!
+            // 🛡️ 핵심 수정: 서버가 nextPlayer를 빼먹었더라도, 오프닝 직후라면 무조건 1P로 고정!
+            if (data.nextPlayer !== undefined && data.nextPlayer !== null) {
+                currentPlayer = data.nextPlayer;
+            } else if (data.move && data.move.isOpening) {
+                currentPlayer = 1; // 오프닝 끝났으니 1P 턴
+            }
+
             requiredNextBox = data.requiredNextBox !== undefined ? data.requiredNextBox : null;
             isFirstTurn = data.isFirstTurn !== undefined ? data.isFirstTurn : false;
             isOpeningPhase = data.isOpeningPhase !== undefined ? data.isOpeningPhase : false;
@@ -778,11 +783,7 @@
             }
 
             updateUI();
-            
-            if (data.move.number !== 0) {
-                playSound(sndPencil);
-            }
-            
+            if (data.move.number !== 0) playSound(sndPencil);
             startTimer();
         }
     });
@@ -1024,7 +1025,7 @@
         }
     });
 
-   // 💡 [버그 3 & 요청 4 해결] 항복 버튼 잠금 영구 해제 및 플레이어 채팅창 잠금
+   // 💡 [버그 2 & 요청 3 해결] 채팅창을 통째로 숨기고 항복 버튼을 확실히 살려줍니다.
    function updateUI() {
         if (isReviewMode) return; 
 
@@ -1063,20 +1064,17 @@
             if (turnEl) turnEl.innerText = isMyTurn ? `🟢 나의 턴 (${playerNames[currentPlayer]})` : `🔴 상대방 대기 중...`;
             if (surrenderBtn) {
                 surrenderBtn.style.display = isGameOver ? 'none' : 'block';
-                // 🛡️ [버그 3 해결] 항복 버튼은 턴에 상관없이 무조건 누를 수 있게 잠금을 풉니다!
-                surrenderBtn.disabled = false; 
+                surrenderBtn.disabled = false; // 언제든지 클릭 가능!
             }
         }
 
-        // 💡 [요청 4 적용] 플레이어는 게임 진행 중에 채팅을 칠 수 없게 입력창을 잠급니다. (관전자만 가능)
-        const chatInput = document.getElementById('gameChatInput');
-        if (chatInput) {
+        // 🛡️ [요청 3 완벽 해결] 당사자는 게임 진행 중에 채팅창 박스 자체가 증발합니다!
+        const inGameChat = document.getElementById('inGameChatContainer');
+        if (inGameChat) {
             if (myPlayerNumber !== 0 && !isGameOver) {
-                chatInput.disabled = true;
-                chatInput.placeholder = "🤫 플레이어는 게임 중 채팅 금지 (관전자 전용)";
+                inGameChat.style.display = 'none'; // 플레이어 + 겜 중 = 안보임
             } else {
-                chatInput.disabled = false;
-                chatInput.placeholder = "실시간 대화 및 훈수 가능...";
+                inGameChat.style.display = 'flex'; // 게임 끝났거나 관전자면 보임
             }
         }
 
@@ -1275,22 +1273,27 @@
         renderVirtualBoardToStep(gameHistory.length); 
     }
 
+    // 💡 [요청 4 해결] 관전자 패널에서도 결과창 보기 버튼을 띄워줍니다.
     function startReviewMode() {
         document.getElementById('gameOverScreen').style.display = 'none'; 
         
-        // 당사자(플레이어)는 주황색 전용 패널을, 관전자는 파란색 패널을 사용합니다.
         if (myPlayerNumber !== 0) {
             document.getElementById('playerReviewControls').style.display = 'block';
             document.getElementById('spectatorReviewControls').style.display = 'none';
         } else {
             document.getElementById('spectatorReviewControls').style.display = 'block';
-            document.getElementById('specLiveBtn').style.display = 'none'; // 끝났으니 라이브 버튼 숨김
+            
+            const specLiveBtn = document.getElementById('specLiveBtn');
+            if (specLiveBtn) specLiveBtn.style.display = 'none'; 
+            
+            // 🛡️ 핵심 수정: 관전자 복기 창에서도 '결과창 보기' 버튼이 짠! 하고 나타납니다.
+            const specResultBtn = document.getElementById('specResultBtn');
+            if (specResultBtn) specResultBtn.style.display = 'inline-block';
         }
         
         spectatorCurrentStep = gameHistory.length;
         renderVirtualBoardToStep(spectatorCurrentStep);
         
-        // 상태 텍스트 양쪽 모두 갱신
         const statusText = `🔎 복기 중 (${spectatorCurrentStep}/${gameHistory.length} 턴)`;
         if(document.getElementById('specReplayStatus')) document.getElementById('specReplayStatus').innerText = statusText;
         if(document.getElementById('playerReplayStatus')) document.getElementById('playerReplayStatus').innerText = statusText;
