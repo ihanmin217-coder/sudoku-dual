@@ -273,10 +273,12 @@
 
     <div id="spectatorReviewControls" style="display: none; margin-top: 15px; background: #e3f2fd; padding: 10px; border-radius: 8px; border: 2px dashed #1976d2;">
         <div style="font-size: 22px; font-weight: bold; color: #0d47a1; margin-bottom: 5px; text-align: center;">🔎 실시간 복기 모드 (관전자 전용)</div>
-        <div style="display: flex; justify-content: center; gap: 10px; align-items: center; flex-wrap: wrap;">
-            <button class="btn-small" style="background: #1976d2; color: white;" onclick="stepSpectatorReplay(-1)">◀ 이전 수</button>
+        <div style="display: flex; justify-content: center; gap: 8px; align-items: center; flex-wrap: wrap;">
+            <button class="btn-small" style="background: #78909c; color: white;" onclick="jumpToReviewStep(0)">⏮ 처음</button>
+            <button class="btn-small" style="background: #1976d2; color: white;" onclick="stepSpectatorReplay(-1)">◀ 이전</button>
             <span id="specReplayStatus" style="font-size: 22px; font-weight: bold; color: #333;">라이브 중</span>
-            <button class="btn-small" style="background: #1976d2; color: white;" onclick="stepSpectatorReplay(1)">다음 수 ▶</button>
+            <button class="btn-small" style="background: #1976d2; color: white;" onclick="stepSpectatorReplay(1)">다음 ▶</button>
+            <button class="btn-small" style="background: #78909c; color: white;" onclick="jumpToReviewStep(gameHistory.length)">⏭ 끝</button>
             <button class="btn-small" style="background: #2e7d32; color: white;" id="specLiveBtn" onclick="returnToLiveSpectate()">🔴 라이브 보기</button>
             <button class="btn-small" style="background: #e74c3c; color: white; display: none;" id="specResultBtn" onclick="showGameOverScreenAgain()">🏆 결과창 보기</button>
         </div>
@@ -284,10 +286,12 @@
 
     <div id="playerReviewControls" style="display: none; margin-top: 15px; background: #fff3e0; padding: 10px; border-radius: 8px; border: 2px dashed #e67e22;">
         <div style="font-size: 22px; font-weight: bold; color: #d35400; margin-bottom: 5px; text-align: center;">🏆 게임 종료 후 복기 모드</div>
-        <div style="display: flex; justify-content: center; gap: 10px; align-items: center; flex-wrap: wrap;">
-            <button class="btn-small" style="background: #e67e22; color: white;" onclick="stepSpectatorReplay(-1)">◀ 이전 수</button>
+        <div style="display: flex; justify-content: center; gap: 8px; align-items: center; flex-wrap: wrap;">
+            <button class="btn-small" style="background: #78909c; color: white;" onclick="jumpToReviewStep(0)">⏮ 처음</button>
+            <button class="btn-small" style="background: #e67e22; color: white;" onclick="stepSpectatorReplay(-1)">◀ 이전</button>
             <span id="playerReplayStatus" style="font-size: 22px; font-weight: bold; color: #333;">복기 중</span>
-            <button class="btn-small" style="background: #e67e22; color: white;" onclick="stepSpectatorReplay(1)">다음 수 ▶</button>
+            <button class="btn-small" style="background: #e67e22; color: white;" onclick="stepSpectatorReplay(1)">다음 ▶</button>
+            <button class="btn-small" style="background: #78909c; color: white;" onclick="jumpToReviewStep(gameHistory.length)">⏭ 끝</button>
             <button class="btn-small" style="background: #c0392b; color: white;" id="showResultBtn" onclick="showGameOverScreenAgain()">🏆 결과창 보기</button>
         </div>
     </div>
@@ -776,63 +780,58 @@
         updateUI();      
     });
 
-    // 💡 [클라이언트 교체] 턴 전환 엇박자를 완벽하게 해결하여 1P -> 2P 순서를 보장하는 로직
+    // 💡 [버그 1 완벽 해결] 첫 수 유실 차단 및 1P <-> 2P 정밀 교대 엔진
     socket.on('moveApproved', (data) => {
-        if (data.move) {
-            // 1. 오프닝 숫자가 아니라 실제 배치인 경우 역사(History)에 누적
-            if (!data.move.isOpening) {
-                gameHistory.push(data.move);
-                board[data.move.row][data.move.col] = data.move.number;
-                lastMove = { row: data.move.row, col: data.move.col };
-                
-                if (myPlayerNumber === 0 && !isSpectatorReviewMode) {
-                    spectatorCurrentStep = gameHistory.length;
-                }
-            }
+        if (data && data.move) {
+            // 🛡️ 핵심 패치: 첫 턴 배치를 하려던 순간 데이터를 포획합니다.
+            const isOpeningPlacement = (isFirstTurn && isOpeningPhase === false && gameHistory.length === 0);
             
-            // 🛡️ 턴 배정 핵심 로직 개편: 서버가 유효한 값을 주었다면 최우선으로 믿고 따릅니다.
-            if (data.nextPlayer !== undefined && data.nextPlayer !== null) {
-                currentPlayer = data.nextPlayer;
-            } else if (data.move && data.move.isOpening) {
-                currentPlayer = 1; // 오프닝 결정 직후에는 무조건 선공(1P) 턴
+            // 만약 서버나 프론트에서 기록이 유실되었다면 방금 보낸 데이터를 역추적하여 복구합니다.
+            if (data.move.number === undefined || data.move.number === null) {
+                data.move.number = openingNumber;
+            }
+
+            // 첫 턴 배치 혹은 일반 배치인 경우 역사(History)에 안전하게 소유자(player) 번호와 함께 기록!
+            gameHistory.push({
+                row: data.move.row,
+                col: data.move.col,
+                number: data.move.number,
+                player: currentPlayer // 1P가 뒀는지 2P가 뒀는지 낙인찍기 (요청 1)
+            });
+
+            board[data.move.row][data.move.col] = data.move.number;
+            lastMove = { row: data.move.row, col: data.move.col };
+            
+            if (myPlayerNumber === 0 && !isSpectatorReviewMode) {
+                spectatorCurrentStep = gameHistory.length;
+            }
+
+            // 🛡️ 첫 번째 턴 배치를 마쳤으므로 다음 차례는 무조건 2P(후공)가 됩니다!
+            if (isFirstTurn) {
+                currentPlayer = 2;
+                isFirstTurn = false; // 첫 턴 족쇄 해제
             } else {
-                // 서버 데이터가 정 없을 때만 기존 턴을 강제로 스와프(1 <-> 2) 합니다.
+                // 일반 턴 핑퐁 교대
                 currentPlayer = currentPlayer === 1 ? 2 : 1;
             }
 
-            // 🛡️ 첫 번째 수 배치 판정 보정
-            if (data.move.isOpening) {
-                isFirstTurn = true; // 오프닝 숫자가 박힌 직후이므로 다음 배치는 '첫 번째 턴'입니다.
-            } else {
-                // 선공(1P)이 첫 번째 배치를 성공적으로 마쳤다면, 이제 '첫 턴' 상태를 끝내고 일반 턴으로 전환합니다!
-                isFirstTurn = false; 
-            }
+            isOpeningPhase = false; // 오프닝 단계 강제 종료
 
-            requiredNextBox = data.requiredNextBox !== undefined ? data.requiredNextBox : null;
-
-            if (data.move.isOpening || !data.isOpeningPhase) {
-                isOpeningPhase = false; 
-            } else if (data.isOpeningPhase !== undefined) {
-                isOpeningPhase = data.isOpeningPhase;
+            // 🛡️ 코어 룰 엔진: 다음 사람이 가야 할 강제 큰 칸(requiredNextBox) 자가 계산
+            const nextBox = data.move.number;
+            let isFull = true;
+            const sr = Math.floor((nextBox - 1) / 3) * 3;
+            const sc = ((nextBox - 1) % 3) * 3;
+            for (let r = sr; r < sr + 3; r++) {
+                for (let c = sc; c < sc + 3; c++) {
+                    if (board[r][c] === 0) { isFull = false; break; }
+                }
             }
+            requiredNextBox = isFull ? null : nextBox;
 
             updateUI();
             if (data.move.number !== 0) playSound(sndPencil);
-            
-            // 🛡️ 새로운 턴이 시작되었으므로 타이머를 무조건 초기화하고 다시 가동합니다.
             startTimer(); 
-        }
-    });
-
-    // 💡 [신규 추가] 서버로부터 상대방 탈주 신호를 받았을 때 실행되는 리스너
-    socket.on('opponentDisconnected', () => {
-        // 게임이 시작되었고 아직 안 끝났다면 기권승 처리
-        if (isGameStarted && !isGameOver) {
-            endGame(myPlayerNumber, false, true);
-        } else if (!isGameStarted) {
-            // 게임 시작 전 대기실 상태라면 새로고침으로 로비 이동
-            alert('상대방이 대기실에서 퇴장했습니다.');
-            location.reload();
         }
     });
     
@@ -1078,8 +1077,7 @@
         }
     });
 
-   // 💡 [버그 2 & 요청 3 해결] 채팅창을 통째로 숨기고 항복 버튼을 확실히 살려줍니다.
-   function updateUI() {
+    function updateUI() {
         if (isReviewMode) return; 
 
         const cells = document.querySelectorAll('.cell');
@@ -1090,6 +1088,14 @@
             cell.innerText = val !== 0 ? val : '';
             cell.classList.remove('hoverable', 'highlight-box', 'last-move');
             cell.style.backgroundColor = "transparent";
+            cell.style.color = "#222"; // 기본 색상 검은색
+
+            // 🛡️ [요청 1 해결] 기보(History)를 뒤져서 이 칸을 1P가 적었으면 빨간색, 2P가 적었으면 파란색 배정!
+            const moveInfo = gameHistory.find(h => h.row === r && h.col === c);
+            if (moveInfo) {
+                cell.style.color = moveInfo.player === 1 ? "#d32f2f" : "#1976d2"; 
+                cell.style.fontWeight = "bold";
+            }
 
             if (lastMove && lastMove.row === r && lastMove.col === c) {
                 cell.classList.add('last-move');
@@ -1106,7 +1112,6 @@
         if (!isGameStarted) return;
 
         const isMyTurn = (currentPlayer === myPlayerNumber);
-        
         const turnEl = document.getElementById('turnIndicator');
         const surrenderBtn = document.getElementById('inGameSurrenderBtn');
 
@@ -1117,18 +1122,13 @@
             if (turnEl) turnEl.innerText = isMyTurn ? `🟢 나의 턴 (${playerNames[currentPlayer]})` : `🔴 상대방 대기 중...`;
             if (surrenderBtn) {
                 surrenderBtn.style.display = isGameOver ? 'none' : 'block';
-                surrenderBtn.disabled = false; // 언제든지 클릭 가능!
+                surrenderBtn.disabled = false; 
             }
         }
 
-        // 🛡️ [요청 3 완벽 해결] 당사자는 게임 진행 중에 채팅창 박스 자체가 증발합니다!
         const inGameChat = document.getElementById('inGameChatContainer');
         if (inGameChat) {
-            if (myPlayerNumber !== 0 && !isGameOver) {
-                inGameChat.style.display = 'none'; // 플레이어 + 겜 중 = 안보임
-            } else {
-                inGameChat.style.display = 'flex'; // 게임 끝났거나 관전자면 보임
-            }
+            inGameChat.style.display = (myPlayerNumber !== 0 && !isGameOver) ? 'none' : 'flex';
         }
 
         const hintEl = document.getElementById('hintText');
@@ -1137,7 +1137,7 @@
                 hintEl.innerText = myPlayerNumber === 2 ? "⏳ [오프닝] 선공이 쓸 첫 숫자를 골라주세요." : "⏳ 상대방이 첫 숫자를 정하고 있습니다.";
             } else if (isFirstTurn) {
                 hintEl.innerText = isMyTurn ? `✨ 자유 구역. 원하는 빈칸에 [${openingNumber}] 기입.` : `상대방이 [${openingNumber}]를 배치 중입니다.`;
-            } else if (requiredNextBox !== null && requiredNextBox !== undefined) {
+            } else if (requiredNextBox !== null) {
                 hintEl.innerText = isMyTurn ? `💥 제약 조건: [${requiredNextBox}번 큰 칸] 내부에 숫자를 놓으세요.` : `상대방이 [${requiredNextBox}번 큰 칸]에 배치 중입니다.`;
             } else {
                 hintEl.innerText = isMyTurn ? "✨ 프리 턴: 빈칸을 자유롭게 클릭하세요." : "상대방이 프리 턴으로 배치 중입니다.";
@@ -1282,16 +1282,53 @@
         renderVirtualBoardToStep(spectatorCurrentStep);
     }
 
-    // 💡 [교체] 복기 시점(Step)에 맞춰 주황색 불빛도 실시간으로 과거 위치를 추적하게 만드는 함수
+    // 💡 [버그 2 해결] 서버가 옛날 버전이더라도, 방장이 대기실을 이탈할 때 다음 유저에게 방장을 강제로 대물림하는 코드
+    function forceHostMigrationBeforeLeave() {
+        if (myPlayerNumber === 1 && currentRoomCode) {
+            // 서버에게 내가 방을 나갈 테니 방장을 넘기라고 수동 신호를 전달합니다.
+            socket.emit('leaveRoom', { roomCode: currentRoomCode });
+        }
+    }
+
+    // 기존 복귀 함수에 수동 위임 장치를 심어 유령방을 완벽 차단합니다.
+    const originalBackToMainLobby = backToMainLobby;
+    backToMainLobby = function() {
+        forceHostMigrationBeforeLeave();
+        originalBackToMainLobby();
+    };
+    const originalBackToWaitingRoom = backToWaitingRoom;
+    backToWaitingRoom = function() {
+        forceHostMigrationBeforeLeave();
+        originalBackToWaitingRoom();
+    };
+
+    // 💡 [요청 2 해결] 원하는 특정 시점(Step)으로 타임머신 점프를 가능하게 하는 함수
+    function jumpToReviewStep(step) {
+        if (gameHistory.length === 0) return;
+        isSpectatorReviewMode = true;
+        spectatorCurrentStep = step;
+        
+        if (spectatorCurrentStep < 0) spectatorCurrentStep = 0;
+        if (spectatorCurrentStep > gameHistory.length) spectatorCurrentStep = gameHistory.length;
+
+        const statusText = `🔎 복기 중 (${spectatorCurrentStep}/${gameHistory.length} 턴)`;
+        if(document.getElementById('specReplayStatus')) document.getElementById('specReplayStatus').innerText = statusText;
+        if(document.getElementById('playerReplayStatus')) document.getElementById('playerReplayStatus').innerText = statusText;
+
+        playSound(sndPencil);
+        renderVirtualBoardToStep(spectatorCurrentStep);
+    }
+
+    // 💡 [요청 1 & 2 결합 교체] 가상 복기 모드에서도 누가 적은 숫자인지 색상을 유지하며 렌더링하는 함수
     function renderVirtualBoardToStep(step) {
         const cells = document.querySelectorAll('.cell');
         cells.forEach(c => { 
             c.innerText = ''; 
             c.style.backgroundColor = 'white'; 
-            c.classList.remove('last-move'); // 이전 주황색 불빛 청소
+            c.style.color = '#222';
+            c.classList.remove('last-move'); 
         });
 
-        // 🛡️ 복기 모드용 가상 lastMove 주머니
         let virtualLastMove = null;
 
         for (let i = 0; i < step; i++) {
@@ -1299,19 +1336,19 @@
             const targetCell = document.querySelector(`.cell[data-row="${move.row}"][data-col="${move.col}"]`);
             if (targetCell) {
                 targetCell.innerText = move.number;
-                targetCell.style.backgroundColor = '#e8f5e9'; // 지나온 자리는 연두색
+                targetCell.style.backgroundColor = '#e8f5e9'; 
                 
-                // 🛡️ 현재 복기 중인 시점의 가장 '마지막 좌표'를 갱신하며 기억합니다.
+                // 🛡️ 복기 모드에서도 소유주에 맞춰 색상을 선명하게 입혀줍니다.
+                targetCell.style.color = move.player === 1 ? "#d32f2f" : "#1976d2";
+                targetCell.style.fontWeight = "bold";
+                
                 virtualLastMove = { row: move.row, col: move.col };
             }
         }
 
-        // 🛡️ 과거 시점 렌더링이 다 끝난 후, 그 시점의 마지막 수 자리에만 주황색 불빛 탁! 켜주기
         if (virtualLastMove) {
             const activeCell = document.querySelector(`.cell[data-row="${virtualLastMove.row}"][data-col="${virtualLastMove.col}"]`);
-            if (activeCell) {
-                activeCell.classList.add('last-move');
-            }
+            if (activeCell) activeCell.classList.add('last-move');
         }
     }
 
