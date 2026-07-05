@@ -403,4 +403,63 @@ export class GameGateway implements OnGatewayDisconnect {
       message: data.message
     });
   }
+
+  // 💡 [버그 4 해결] 방장이 모달창에서 설정한 시간/선후공 규칙을 방에 적용하는 로직
+  @SubscribeMessage('updateRoomSettings')
+  handleUpdateRoomSettings(@ConnectedSocket() client: Socket, @MessageBody() data: any) {
+    const room = this.matchingRooms[data.roomCode];
+    if (room && room.creator.id === client.id) {
+      room.turnLimit = data.turnLimit;
+      room.turnPref = data.turnPref;
+      
+      this.server.to(data.roomCode).emit('roomStateUpdated', { room, isGameRoomOver: true });
+    }
+  }
+
+  // 💡 [버그 3 해결] 방장이 특정 유저(또는 본인)를 1P나 2P 자리에 앉히는 권한 통제 로직
+  @SubscribeMessage('assignSlotTarget')
+  handleAssignSlotTarget(@ConnectedSocket() client: Socket, @MessageBody() data: any) {
+    const room = this.matchingRooms[data.roomCode];
+    if (!room) return;
+
+    // 오직 방장만 자리 배치 권한이 있음
+    if (room.creator.id !== client.id) return;
+
+    let targetName = '';
+    // 타겟이 방장 본인인지, 게스트인지 확인
+    if (room.creator.id === data.targetId) {
+      targetName = room.creator.nickname;
+    } else {
+      const guest = room.guests.find((g: any) => g.id === data.targetId);
+      if (guest) targetName = guest.nickname;
+    }
+
+    if (!targetName) return;
+
+    // 선택된 슬롯에 따라 아이디와 닉네임 배정
+    if (data.slot === 1) {
+      if (room.p2Id === data.targetId) { room.p2Id = null; room.p2Name = null; }
+      room.p1Id = data.targetId; room.p1Name = targetName;
+    } else if (data.slot === 2) {
+      if (room.p1Id === data.targetId) { room.p1Id = null; room.p1Name = null; }
+      room.p2Id = data.targetId; room.p2Name = targetName;
+    }
+
+    // 대결 상대(SelectedGuestId) 자동 정렬
+    room.selectedGuestId = null;
+    if (room.p1Id && room.p1Id !== room.creator.id) room.selectedGuestId = room.p1Id;
+    if (room.p2Id && room.p2Id !== room.creator.id) room.selectedGuestId = room.p2Id;
+
+    this.server.to(data.roomCode).emit('roomStateUpdated', { room, isGameRoomOver: true });
+  }
+
+  // 💡 [버그 2 해결] 브라우저 창 닫기/뒤로 가기 시 호출되어 확실하게 방을 이탈시키는 방어막
+  @SubscribeMessage('leaveRoom')
+  handleLeaveRoom(@ConnectedSocket() client: Socket, @MessageBody() data: any) {
+    client.leave(data.roomCode);
+    // 기존에 완벽하게 만들어둔 handleDisconnect(탈주/위임/폭파 로직)를 수동으로 강제 가동시킵니다.
+    if (typeof (this as any).handleDisconnect === 'function') {
+      (this as any).handleDisconnect(client);
+    }
+  }
 }

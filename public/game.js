@@ -125,10 +125,19 @@ socket.on('roomStateUpdated', (data) => {
     const room = data.room;
     if (!room) return;
     document.getElementById('roomCodeDisplay').innerText = currentRoomCode;
-    document.getElementById('hostConfigBtn').style.display = (socket.id === room.creator.id) ? 'block' : 'none';
-    document.getElementById('startGameBtn').style.display = (socket.id === room.creator.id) ? 'block' : 'none';
+    
+    // 🛡️ socket.id는 가끔 꼬일 수 있으므로, 확실한 myId를 기준으로 방장 권한을 부여합니다. (버그 4 해결)
+    const isMeHost = (myId === room.creator.id);
+    document.getElementById('hostConfigBtn').style.display = isMeHost ? 'block' : 'none';
+    document.getElementById('startGameBtn').style.display = isMeHost ? 'block' : 'none';
 
-    // 명단 및 권한 렌더링
+    // 방 설정 요약본 업데이트
+    const prefText = room.turnPref === 'RANDOM' ? '🎲 랜덤' : (room.turnPref === 'P1_FIRST' ? '🔴 1P 선공' : '🔵 2P 후공');
+    const limitText = room.turnLimit ? room.turnLimit : 60;
+    const configSummary = document.getElementById('currentConfigSummary');
+    if (configSummary) configSummary.innerText = `시간 ${limitText}초 / 선후공: ${prefText}`;
+
+    // 참가자 명단 렌더링
     const waitUserList = document.getElementById('waitUserList');
     waitUserList.innerHTML = '';
     let users = [{ id: room.creator.id, nickname: room.creator.nickname, isHost: true }];
@@ -137,13 +146,17 @@ socket.on('roomStateUpdated', (data) => {
 
     users.forEach(u => {
         const div = document.createElement('div');
-        div.style.padding = '5px 10px'; div.style.background = '#fff'; div.style.border = '1px solid #ddd'; div.style.borderRadius = '4px'; div.style.display = 'flex'; div.style.justifyContent = 'space-between'; div.style.fontSize = '22px';
+        div.style.padding = '5px 10px'; div.style.background = '#fff'; div.style.border = '1px solid #ddd'; 
+        div.style.borderRadius = '4px'; div.style.display = 'flex'; div.style.justifyContent = 'space-between'; div.style.alignItems = 'center'; div.style.fontSize = '22px';
         div.innerText = u.isHost ? `👑 ${u.nickname} (방장)` : `👤 ${u.nickname}`;
         
-        if (socket.id === room.creator.id && !u.isHost) {
+        // 🛡️ 방장인 경우, '자신을 포함한' 모든 유저 옆에 1P/2P 임명 버튼을 띄워줍니다! (버그 3 해결)
+        if (isMeHost) {
             const btnArea = document.createElement('div'); btnArea.style.display = 'flex'; btnArea.style.gap = '5px';
-            const b1 = document.createElement('button'); b1.innerText = '1P 임명'; b1.onclick = () => socket.emit('assignSlotTarget', { roomCode: currentRoomCode, targetId: u.id, slot: 1 });
-            const b2 = document.createElement('button'); b2.innerText = '2P 임명'; b2.onclick = () => socket.emit('assignSlotTarget', { roomCode: currentRoomCode, targetId: u.id, slot: 2 });
+            const b1 = document.createElement('button'); b1.innerText = '1P 임명'; b1.className = 'btn-small';
+            b1.onclick = () => socket.emit('assignSlotTarget', { roomCode: currentRoomCode, targetId: u.id, slot: 1 });
+            const b2 = document.createElement('button'); b2.innerText = '2P 임명'; b2.className = 'btn-small';
+            b2.onclick = () => socket.emit('assignSlotTarget', { roomCode: currentRoomCode, targetId: u.id, slot: 2 });
             btnArea.appendChild(b1); btnArea.appendChild(b2); div.appendChild(btnArea);
         }
         waitUserList.appendChild(div);
@@ -156,8 +169,10 @@ socket.on('roomStateUpdated', (data) => {
     playerNames[2] = room.p2Name || '후공 대기자';
     const hostCrown = (room.creator.id === room.p1Id) ? ' 👑' : '';
     const guestCrown = (room.creator.id === room.p2Id) ? ' 👑' : '';
-    document.getElementById('p1Info').innerText = `선공: ${playerNames[1]}${hostCrown}`;
-    document.getElementById('p2Info').innerText = `후공: ${playerNames[2]}${guestCrown}`;
+    const p1Info = document.getElementById('p1Info');
+    const p2Info = document.getElementById('p2Info');
+    if(p1Info) p1Info.innerText = `선공: ${playerNames[1]}${hostCrown}`;
+    if(p2Info) p2Info.innerText = `후공: ${playerNames[2]}${guestCrown}`;
 });
 
 function requestStartGame() { socket.emit('startGame', { roomCode: currentRoomCode }); }
@@ -411,3 +426,29 @@ socket.on('receiveEmoticon', (data) => {
     setTimeout(() => { floating.remove(); }, 2000);
 });
 const style = document.createElement('style'); style.innerHTML = `@keyframes floatUp { 0% { opacity: 1; bottom: 100px; } 100% { opacity: 0; bottom: 200px; } }`; document.head.appendChild(style);
+
+socket.on('roomListUpdated', (roomList) => {
+    const container = document.getElementById('roomListContainer');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    if (!roomList || roomList.length === 0) {
+        container.innerHTML = '<div style="color: #888; text-align: center; font-size: 22px; padding: 10px;">개설된 공개방이 없습니다.</div>';
+        return;
+    }
+    roomList.forEach(r => {
+        const div = document.createElement('div');
+        div.style.padding = '10px'; div.style.borderBottom = '1px solid #ccc';
+        div.style.display = 'flex'; div.style.justifyContent = 'space-between'; div.style.alignItems = 'center';
+        div.innerHTML = `<span style="font-size: 22px;">👑 ${r.hostName} 님의 방 (${r.playerCount}명)</span>
+                         <button class="btn-small" style="background:#3498db; color:white;" onclick="document.getElementById('joinCodeInput').value='${r.roomCode}'; joinRoomByCode();">입장</button>`;
+        container.appendChild(div);
+    });
+});
+
+// 💡 [버그 2 해결] 뒤로 가기나 탭 닫기 등 비정상적인 종료 시, 서버에 확실하게 방 나가기 신호를 쏘고 죽는 방어막
+window.addEventListener('beforeunload', () => {
+    if (currentRoomCode) {
+        socket.emit('leaveRoom', { roomCode: currentRoomCode });
+    }
+});
