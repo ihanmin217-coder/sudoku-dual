@@ -191,52 +191,71 @@
     <div id="lobbyError" style="color: red; font-size: 22px;"></div>
 </div>
 
-<div class="panel-screen" id="waitingRoomScreen" style="display: none;">
-    <div class="title-text">대기실</div>
+<div class="panel-screen" id="waitingRoomScreen" style="display: none; position: relative;">
+    <button onclick="openConfigModal()" id="hostConfigBtn" style="position: absolute; top: 15px; right: 15px; font-size: 20px; background: #fff; border: 2px solid #333; border-radius: 8px; padding: 5px 10px; cursor: pointer; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">⚙️ 게임 설정</button>
     
-    <div style="font-size: 30px; color: #d32f2f; margin-bottom: 10px; display: flex; justify-content: center; align-items: center;">
-        <span>방 코드: <strong id="waitRoomCode">----</strong></span>
-        <button class="btn-small" id="toggleCodeBtn" style="background:#546e7a; color:white; margin-left: 15px;" onclick="toggleRoomCodeVisibility()">👀 숨기기</button>
-    </div>
+    <div class="title-text" style="font-size: 38px; margin-bottom: 5px;">👥 대기방 (ROOM: <span id="roomCodeDisplay">-</span>)</div>
     
-    <div style="text-align: left; margin-bottom: 20px; font-size: 26px;">
-        <div id="waitHostName" style="margin-bottom: 5px; font-weight: bold; color: #333;">방장: -</div>
-        <div id="waitTurnLimitInfo" style="margin-bottom: 5px; color: #e67e22; font-weight: bold;">⏳ 제한 시간: 60초</div>
-        <div id="waitTurnPrefInfo" style="color: #2980b9; font-weight: bold;">⚔️ 선공 설정: 랜덤 생성</div>
-
-        <div style="border-bottom: 2px solid #ccc; padding-bottom: 5px;">참가자 목록</div>
-        <div id="guestListContainer" style="margin-top: 10px; max-height: 250px; overflow-y: auto;"></div>
+    <div style="background: rgba(0,0,0,0.03); padding: 12px; border-radius: 8px; margin-bottom: 15px; font-size: 22px; text-align: center; border: 2px dashed #999;">
+        📌 현재 방 설정: <span id="currentConfigSummary" style="font-weight: bold; color: #e67e22;">시간 60초 / 선후공: 랜덤</span>
     </div>
 
-    <div id="hostControls" style="display: none; border-top: 2px dashed #ccc; padding-top: 20px;">
-        <div style="font-size: 24px; text-align: left; margin-bottom: 10px;">⏳ 턴 제한 시간 (방장 전용)</div>
-        <select id="timeLimitSelect" class="input-box" style="margin-bottom: 20px; width: 100%;" onchange="changeTimeLimit()">
-            <option value="30">30초 (스피드전)</option>
-            <option value="60" selected>60초 (기본)</option>
-            <option value="90">90초 (장고)</option>
-            <option value="9999">무제한 (연습용)</option>
-        </select>
-
-        <div style="font-size: 24px; text-align: left; margin-bottom: 10px;">대결 턴 설정 (방장 기준)</div>
-        <div class="turn-select">
-            <label><input type="radio" name="turnPref" value="P1" onchange="changeTurnPreference()"> 방장 선공(1P)</label>
-            <label><input type="radio" name="turnPref" value="P2" onchange="changeTurnPreference()"> 대결상대 선공(2P)</label>
-            <label><input type="radio" name="turnPref" value="RANDOM" checked onchange="changeTurnPreference()"> 랜덤</label>
+    <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;">
+        <div style="background: #fff; padding: 10px; border: 2px solid #333; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 24px; font-weight: bold; color: #d32f2f;">🔴 선공 (1P) 자리고정</span>
+            <span id="p1SlotName" style="font-size: 24px; color:#666;">[비어있음]</span>
+            <button id="assignP1Btn" class="btn-small" style="background:#d32f2f; color:white; display:none;" onclick="requestAssignSlot(1)">지정하기</button>
         </div>
-        <button class="btn-main" id="startGameBtn" onclick="requestStartGame()" disabled>상대방 선택 대기 중...</button>
+        <div style="background: #fff; padding: 10px; border: 2px solid #333; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 24px; font-weight: bold; color: #1976d2;">🔵 후공 (2P) 자리고정</span>
+            <span id="p2SlotName" style="font-size: 24px; color:#666;">[비어있음]</span>
+            <button id="assignP2Btn" class="btn-small" style="background:#1976d2; color:white; display:none;" onclick="requestAssignSlot(2)">지정하기</button>
+        </div>
     </div>
 
-    <div id="guestControls" style="display: none; border-top: 2px dashed #ccc; padding-top: 20px;">
-        <button class="btn-main btn-sub" id="readyBtn" onclick="toggleReady()">준비하기 (대기 중)</button>
-    </div>
-
-    <button class="btn-main" style="background-color: #7f8c8d; border-color: #606b6d; margin-top: 15px;" onclick="leaveWaitingRoom()">🚪 대기실 나가기</button>
+    <div style="font-size: 24px; font-weight: bold; margin-bottom: 5px;">참가자 명단 (<span id="participantCount">1</span>/9)</div>
+    <div id="waitUserList" style="display: flex; flex-direction: column; gap: 5px; margin-bottom: 20px; max-height: 150px; overflow-y: auto;"></div>
 
     <div class="chat-container">
         <div class="chat-messages" id="waitChatMessages"></div>
         <div class="chat-input-area">
-            <input type="text" id="waitChatInput" class="chat-input" placeholder="메시지를 입력하세요..." onkeypress="if(event.keyCode==13) sendRoomChat('wait')">
+            <input type="text" id="waitChatInput" class="chat-input" placeholder="대기실 대화 나누기..." onkeypress="if(event.keyCode==13) sendRoomChat('wait')">
             <button class="btn-chat-send" onclick="sendRoomChat('wait')">전송</button>
+        </div>
+    </div>
+
+    <div style="display: flex; gap: 10px; margin-top: 20px;">
+        <button class="btn-main" onclick="backToMainLobby()" style="background: #95a5a6; flex: 1;">🚪 나가기</button>
+        <button class="btn-main" id="startGameBtn" onclick="requestStartGame()" style="background: #2ecc71; flex: 2; display: none;">🎮 게임 시작</button>
+    </div>
+</div>
+
+<div id="configModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); justify-content: center; align-items: center; z-index: 5000;">
+    <div style="background: #fcf8eb; border: 4px solid #222; padding: 25px; border-radius: 12px; width: 90%; max-width: 380px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+        <div style="font-size: 32px; font-weight: bold; text-align: center; margin-bottom: 20px; color: #333;">⚙️ 스도쿠 듀얼 매치 설정</div>
+        
+        <div style="margin-bottom: 15px;">
+            <label style="font-size: 24px; font-weight: bold; display: block; margin-bottom: 5px;">⏱️ 한 턴당 시간 제한</label>
+            <select id="modalTurnLimit" style="width: 100%; font-size: 22px; padding: 5px; border: 2px solid #333; border-radius: 6px;">
+                <option value="30">30초 (속전속결)</option>
+                <option value="60" selected>60초 (표준 대국)</option>
+                <option value="90">90초 (장고 모드)</option>
+                <option value="120">120초 (무제한급 수읽기)</option>
+            </select>
+        </div>
+
+        <div style="margin-bottom: 25px;">
+            <label style="font-size: 24px; font-weight: bold; display: block; margin-bottom: 5px;">👑 선공권 배정 설정</label>
+            <select id="modalTurnPref" style="width: 100%; font-size: 22px; padding: 5px; border: 2px solid #333; border-radius: 6px;">
+                <option value="RANDOM" selected>🎲 완전 랜덤 공평 배정</option>
+                <option value="P1_FIRST">🔴 1P 슬롯 유저 무조건 선공</option>
+                <option value="P2_FIRST">🔵 2P 슬롯 유저 무조건 선공</option>
+            </select>
+        </div>
+
+        <div style="display: flex; gap: 10px;">
+            <button onclick="closeConfigModal()" style="flex: 1; font-size: 22px; padding: 8px; background: #e74c3c; color: white; border: 2px solid #333; border-radius: 6px; cursor: pointer; font-weight: bold;">취소</button>
+            <button onclick="saveConfigFromModal()" style="flex: 1; font-size: 22px; padding: 8px; background: #2ecc71; color: white; border: 2px solid #333; border-radius: 6px; cursor: pointer; font-weight: bold;">설정 적용</button>
         </div>
     </div>
 </div>
@@ -245,8 +264,8 @@
     <div class="title-text" style="font-size: 40px; margin-bottom: 10px; text-align: center;">스도쿠 듀얼 - 매칭전</div>
     
     <div style="display: flex; justify-content: space-between; font-size: 28px; margin-bottom: 10px; background: rgba(0,0,0,0.05); padding: 10px; border-radius: 8px;">
-        <div id="p1Info" style="color: #d32f2f; font-weight: bold;">1P (방장): -</div>
-        <div id="p2Info" style="color: #1976d2; font-weight: bold;">2P (상대): -</div>
+        <div id="p1Info" style="color: #d32f2f; font-weight: bold;">선공: -</div>
+        <div id="p2Info" style="color: #1976d2; font-weight: bold;">후공: -</div>
     </div>
     
     <div id="turnIndicator" style="font-size: 32px; font-weight: bold; margin-bottom: 5px; color: #222; text-align: center;">-</div>
@@ -780,57 +799,58 @@
         updateUI();      
     });
 
-    // 💡 [버그 1 완벽 해결] 첫 수 유실 차단 및 1P <-> 2P 정밀 교대 엔진
+    // 💡 [버그 1 해결] 오프닝 숫자가 박힐 때 생기던 자바스크립트 크래시 현상 완벽 방어 처리
     socket.on('moveApproved', (data) => {
         if (data && data.move) {
-            // 🛡️ 핵심 패치: 첫 턴 배치를 하려던 순간 데이터를 포획합니다.
-            const isOpeningPlacement = (isFirstTurn && isOpeningPhase === false && gameHistory.length === 0);
-            
-            // 만약 서버나 프론트에서 기록이 유실되었다면 방금 보낸 데이터를 역추적하여 복구합니다.
-            if (data.move.number === undefined || data.move.number === null) {
-                data.move.number = openingNumber;
-            }
+            // 🛡️ 오프닝 숫자가 결정되어 넘어온 신호인지 별도 스위치를 확보합니다.
+            const isOpeningSignal = (data.move.isOpening === true || isOpeningPhase === true && gameHistory.length === 0);
 
-            // 첫 턴 배치 혹은 일반 배치인 경우 역사(History)에 안전하게 소유자(player) 번호와 함께 기록!
-            gameHistory.push({
-                row: data.move.row,
-                col: data.move.col,
-                number: data.move.number,
-                player: currentPlayer // 1P가 뒀는지 2P가 뒀는지 낙인찍기 (요청 1)
-            });
-
-            board[data.move.row][data.move.col] = data.move.number;
-            lastMove = { row: data.move.row, col: data.move.col };
-            
-            if (myPlayerNumber === 0 && !isSpectatorReviewMode) {
-                spectatorCurrentStep = gameHistory.length;
-            }
-
-            // 🛡️ 첫 번째 턴 배치를 마쳤으므로 다음 차례는 무조건 2P(후공)가 됩니다!
-            if (isFirstTurn) {
-                currentPlayer = 2;
-                isFirstTurn = false; // 첫 턴 족쇄 해제
-            } else {
-                // 일반 턴 핑퐁 교대
-                currentPlayer = currentPlayer === 1 ? 2 : 1;
-            }
-
-            isOpeningPhase = false; // 오프닝 단계 강제 종료
-
-            // 🛡️ 코어 룰 엔진: 다음 사람이 가야 할 강제 큰 칸(requiredNextBox) 자가 계산
-            const nextBox = data.move.number;
-            let isFull = true;
-            const sr = Math.floor((nextBox - 1) / 3) * 3;
-            const sc = ((nextBox - 1) % 3) * 3;
-            for (let r = sr; r < sr + 3; r++) {
-                for (let c = sc; c < sc + 3; c++) {
-                    if (board[r][c] === 0) { isFull = false; break; }
+            if (isOpeningSignal) {
+                // 오프닝 페이즈일 때는 강제로 오프닝 값을 주머니에 복구하고 보드판 연산은 패스합니다!
+                if (data.move.number !== undefined && data.move.number !== null) {
+                    openingNumber = data.move.number;
                 }
+                isOpeningPhase = false;
+                isFirstTurn = true; // 다음 배치는 무조건 역사적인 첫 번째 턴!
+                currentPlayer = 1;   // 첫 수 기입권은 1P(선공)에게 귀속
+            } else {
+                // 일반 인게임 배치 처리
+                gameHistory.push({
+                    row: data.move.row,
+                    col: data.move.col,
+                    number: data.move.number,
+                    player: currentPlayer
+                });
+                board[data.move.row][data.move.col] = data.move.number;
+                lastMove = { row: data.move.row, col: data.move.col };
+
+                if (myPlayerNumber === 0 && !isSpectatorReviewMode) {
+                    spectatorCurrentStep = gameHistory.length;
+                }
+
+                // 턴 교대 로직 보정
+                if (isFirstTurn) {
+                    currentPlayer = 2; // 선공이 첫 수를 두었으니 바로 후공(2P) 턴
+                    isFirstTurn = false;
+                } else {
+                    currentPlayer = currentPlayer === 1 ? 2 : 1;
+                }
+                
+                // 코어 룰 엔진: 다음 제약 박스 연산
+                const nextBox = data.move.number;
+                let isFull = true;
+                const sr = Math.floor((nextBox - 1) / 3) * 3;
+                const sc = ((nextBox - 1) % 3) * 3;
+                for (let r = sr; r < sr + 3; r++) {
+                    for (let c = sc; c < sc + 3; c++) {
+                        if (board[r][c] === 0) { isFull = false; break; }
+                    }
+                }
+                requiredNextBox = isFull ? null : nextBox;
             }
-            requiredNextBox = isFull ? null : nextBox;
 
             updateUI();
-            if (data.move.number !== 0) playSound(sndPencil);
+            if (data.move.number && data.move.number !== 0) playSound(sndPencil);
             startTimer(); 
         }
     });
@@ -1437,6 +1457,119 @@
             openNumpadModal(true); 
         }
     }
+
+    // 💡 [요청 4 신규] 설정 팝업창 제어용 로직들
+    let serverConfigTurnLimit = 60;
+    let serverConfigTurnPref = 'RANDOM';
+
+    function openConfigModal() {
+        if (myPlayerNumber !== 1) return alert("게임 설정 변경은 방장만 가능합니다!");
+        document.getElementById('modalTurnLimit').value = serverConfigTurnLimit;
+        document.getElementById('modalTurnPref').value = serverConfigTurnPref;
+        document.getElementById('configModal').style.display = 'flex';
+    }
+
+    function closeConfigModal() {
+        document.getElementById('configModal').style.display = 'none';
+    }
+
+    function saveConfigFromModal() {
+        serverConfigTurnLimit = parseInt(document.getElementById('modalTurnLimit').value);
+        serverConfigTurnPref = document.getElementById('modalTurnPref').value;
+        
+        // 서버 측에 방의 변경된 세팅값을 전송하여 동기화 유도
+        socket.emit('updateRoomSettings', {
+            roomCode: currentRoomCode,
+            turnLimit: serverConfigTurnLimit,
+            turnPref: serverConfigTurnPref
+        });
+        
+        // 로컬 요약 정보 갱신
+        const prefText = serverConfigTurnPref === 'RANDOM' ? '🎲 랜덤' : (serverConfigTurnPref === 'P1_FIRST' ? '🔴 1P 선공' : '🔵 2P 후공');
+        document.getElementById('currentConfigSummary').innerText = `시간 ${serverConfigTurnLimit}초 / 선후공: ${prefText}`;
+        
+        closeConfigModal();
+    }
+
+    // 💡 [요청 3 신규] 대기실 슬롯(1P / 2P / 관전자) 자리고정 요청 로직
+    let roomSlotP1Id = null;
+    let roomSlotP2Id = null;
+
+    function requestAssignSlot(slotNum) {
+        // 방장이 특정 유저나 자신을 1P/2P 슬롯에 귀속시키는 신호 송신
+        socket.emit('assignRoomSlot', {
+            roomCode: currentRoomCode,
+            slot: slotNum
+        });
+    }
+
+    // 💡 방 참가자 목록 및 왕관 이모티콘 닉네임 동기화 뼈대 이식 (요청 2 & 3 통합)
+    socket.on('roomStateUpdated', (data) => {
+        const room = data.room;
+        if (!room) return;
+        
+        document.getElementById('roomCodeDisplay').innerText = currentRoomCode;
+        
+        // 1. 방장 UI 톱니바퀴 활성화 통제
+        document.getElementById('hostConfigBtn').style.display = (socket.id === room.creator.id) ? 'block' : 'none';
+        document.getElementById('startGameBtn').style.display = (socket.id === room.creator.id) ? 'block' : 'none';
+
+        // 2. 참여 명단 렌더링 및 왕관(👑) 마킹 처리
+        const waitUserList = document.getElementById('waitUserList');
+        waitUserList.innerHTML = '';
+        
+        let users = [{ id: room.creator.id, nickname: room.creator.nickname, isHost: true }];
+        if (room.guests) {
+            room.guests.forEach(g => users.push({ id: g.id, nickname: g.nickname, isHost: false }));
+        }
+        
+        document.getElementById('participantCount').innerText = users.length;
+
+        users.forEach(u => {
+            const div = document.createElement('div');
+            div.style.padding = '5px 10px';
+            div.style.background = '#fff';
+            div.style.border = '1px solid #ddd';
+            div.style.borderRadius = '4px';
+            div.style.display = 'flex';
+            div.style.justify = 'space-between';
+            div.style.fontSize = '22px';
+            
+            // 방장 이름 뒤에는 무조건 왕관 마크 합성
+            div.innerText = u.isHost ? `👑 ${u.nickname} (방장)` : `👤 ${u.nickname}`;
+            
+            // 방장 전용 자리 지정 핸들러 버튼 합성
+            if (socket.id === room.creator.id && !u.isHost) {
+                const btnArea = document.createElement('div');
+                btnArea.style.display = 'flex';
+                btnArea.style.gap = '5px';
+                
+                const b1 = document.createElement('button'); b1.innerText = '1P 임명';
+                b1.onclick = () => socket.emit('assignSlotTarget', { roomCode: currentRoomCode, targetId: u.id, slot: 1 });
+                const b2 = document.createElement('button'); b2.innerText = '2P 임명';
+                b2.onclick = () => socket.emit('assignSlotTarget', { roomCode: currentRoomCode, targetId: u.id, slot: 2 });
+                
+                btnArea.appendChild(b1); btnArea.appendChild(b2);
+                div.appendChild(btnArea);
+            }
+            waitUserList.appendChild(div);
+        });
+
+        // 3. 1P 및 2P 지정 정보 슬롯 미러링
+        const hostName = room.creator.nickname;
+        document.getElementById('p1SlotName').innerText = room.p1Name ? room.p1Name : `[비어있음 - 방장 임명대기]`;
+        document.getElementById('p2SlotName').innerText = room.p2Name ? room.p2Name : `[비어있음 - 방장 임명대기]`;
+        
+        // 인게임 상단 닉네임 라벨 동기화 개편 (요청 2 완료)
+        playerNames[1] = room.p1Name || '선공 대기자';
+        playerNames[2] = room.p2Name || '후공 대기자';
+        
+        const hostCrown = (room.creator.id === room.p1Id) ? ' 👑' : '';
+        const guestCrown = (room.creator.id === room.p2Id) ? ' 👑' : '';
+        
+        document.getElementById('p1Info').innerText = `선공: ${playerNames[1]}${hostCrown}`;
+        document.getElementById('p2Info').innerText = `후공: ${playerNames[2]}${guestCrown}`;
+    });
 </script>
 </body>
 </html>
