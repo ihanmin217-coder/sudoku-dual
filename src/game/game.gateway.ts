@@ -122,40 +122,53 @@ export class GameGateway implements OnGatewayDisconnect {
     }
   }
   
-  // 💡 [교체] 방 개설 시 비밀방(isPrivate) 옵션을 받아 저장합니다.
-  // 💡 [수정] 방 생성 시 turnLimit(제한 시간) 속성을 추가로 저장합니다.
-  // 💡 [수정] 방 생성 시 turnPref(선공 설정) 속성을 추가로 저장합니다.
+  // 💡 공개/비밀 선택을 받아 방을 개설하는 백엔드 로직
   @SubscribeMessage('createRoom')
-  handleCreateRoom(@MessageBody() data: { nickname: string, isPrivate: boolean }, @ConnectedSocket() client: Socket) {
+  handleCreateRoom(@ConnectedSocket() client: Socket, @MessageBody() data: any) {
     const roomCode = Math.floor(1000 + Math.random() * 9000).toString();
+    
     this.matchingRooms[roomCode] = {
       creator: { id: client.id, nickname: data.nickname },
       guests: [],
       selectedGuestId: null,
-      isPrivate: data.isPrivate,
+      isPrivate: data.isPrivate || false, // true면 비밀방, false면 공개방
       turnLimit: 60,
-      turnPref: 'RANDOM' // 💡 [신규] 기본 선공 설정은 랜덤으로 세팅
+      turnPref: 'RANDOM'
     };
+    
     client.join(roomCode);
     client.emit('roomJoined', { roomCode, isHost: true, myId: client.id });
-    this.broadcastRoomState(roomCode);
-    this.broadcastRoomList();
+    if (typeof (this as any).broadcastRoomList === 'function') (this as any).broadcastRoomList();
   }
 
+  // 💡 [신규] 방 코드를 직접 치고 들어오거나, 고유 링크(URL)를 타고 들어오는 유저 처리
   @SubscribeMessage('joinRoom')
-  handleJoinRoom(@MessageBody() data: { roomCode: string; nickname: string }, @ConnectedSocket() client: Socket) {
-    const room = this.matchingRooms[data.roomCode];
-    if (room) {
-      room.guests.push({ id: client.id, nickname: data.nickname, isReady: false });
-      if (!room.selectedGuestId) room.selectedGuestId = client.id;
+  handleJoinRoom(@ConnectedSocket() client: Socket, @MessageBody() data: any) {
+    const roomCode = data.roomCode;
+    const room = this.matchingRooms[roomCode];
 
-      client.join(data.roomCode);
-      client.emit('roomJoined', { roomCode: data.roomCode, isHost: false, myId: client.id });
-      this.broadcastRoomState(data.roomCode);
-    } else {
-      client.emit('joinError', '방이 존재하지 않습니다.');
+    // 방이 존재하지 않거나 이미 폭파된 경우
+    if (!room) {
+      return client.emit('joinError', '존재하지 않거나 이미 종료된 방입니다.');
     }
-    this.broadcastRoomList();
+
+    // 서버 게임 엔진에서 현재 게임 진행 상태 파악
+    const gameServiceAny = this.gameService as any;
+    const gameRoom = typeof gameServiceAny.getRoom === 'function' ? gameServiceAny.getRoom(roomCode) : null;
+    
+    // 유저를 방 명단에 추가하고 소켓 그룹(Room)에 조인시킴
+    room.guests.push({ id: client.id, nickname: data.nickname });
+    client.join(roomCode);
+    
+    client.emit('roomJoined', { roomCode, isHost: false, myId: client.id });
+    
+    // 방 전체에 새로운 유저가 들어왔음을 알림
+    this.server.to(roomCode).emit('roomStateUpdated', { 
+      room, 
+      isGameRoomOver: gameRoom ? gameRoom.isGameOver : true 
+    });
+    
+    if (typeof (this as any).broadcastRoomList === 'function') (this as any).broadcastRoomList();
   }
 
   @SubscribeMessage('toggleReady')

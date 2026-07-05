@@ -51,14 +51,67 @@ function playSound(snd) {
     try { snd.currentTime = 0; snd.play().catch(e=>{}); } catch(e) {}
 }
 
-// 💡 3. 로비 및 대기방 통신 로직
-function quickStart() {
+// 💡 URL 파라미터 감지 (누군가 초대 링크로 들어왔을 때 방 코드 자동 기입)
+window.onload = () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomFromUrl = urlParams.get('room');
+    if (roomFromUrl) {
+        document.getElementById('joinCodeInput').value = roomFromUrl;
+        document.getElementById('nicknameInput').focus();
+    }
+};
+
+// 💡 방 생성 및 코드 입장 로직 통합
+function createNewRoom(isPrivate) {
     const nick = document.getElementById('nicknameInput').value.trim() || '익명';
-    socket.emit('quickStart', { nickname: nick });
+    socket.emit('createRoom', { nickname: nick, isPrivate: isPrivate });
 }
-function createPrivateRoom() {
+
+function joinRoomByCode() {
     const nick = document.getElementById('nicknameInput').value.trim() || '익명';
-    socket.emit('createRoom', { nickname: nick, isPrivate: true });
+    const code = document.getElementById('joinCodeInput').value.trim();
+    if (!code) return alert("입장할 방 코드를 입력해주세요!");
+    socket.emit('joinRoom', { roomCode: code, nickname: nick });
+}
+
+socket.on('joinError', (msg) => {
+    alert(msg);
+});
+
+// 💡 초대 링크 복사 기능
+function copyInviteLink() {
+    const link = document.getElementById('inviteLinkDisplay').innerText;
+    navigator.clipboard.writeText(link).then(() => {
+        alert("초대 링크가 복사되었습니다! 친구에게 붙여넣기 하세요.");
+    });
+}
+
+// 방에 입장 성공했을 때 UI 전환 및 고유 주소(URL) 생성
+socket.on('roomJoined', (data) => {
+    myId = data.myId;
+    currentRoomCode = data.roomCode;
+    document.getElementById('lobbyScreen').style.display = 'none';
+    document.getElementById('waitingRoomScreen').style.display = 'block';
+    
+    // 고유 주소 생성 및 화면 표시
+    const inviteUrl = window.location.origin + window.location.pathname + '?room=' + currentRoomCode;
+    document.getElementById('inviteLinkDisplay').innerText = inviteUrl;
+    
+    // 브라우저 주소창도 깔끔하게 변경 (새로고침 없이)
+    window.history.replaceState({}, '', '?room=' + currentRoomCode);
+});
+
+function backToMainLobby() { 
+    forceHostMigrationBeforeLeave(); 
+    document.getElementById('gameOverScreen').style.display = 'none'; 
+    document.getElementById('gameContainer').style.display = 'none'; 
+    document.getElementById('waitingRoomScreen').style.display = 'none'; 
+    document.getElementById('lobbyScreen').style.display = 'block'; 
+    currentRoomCode = ''; 
+    isGameOver = true; 
+    isGameStarted = false; 
+    // 로비로 나오면 주소창의 방 코드 꼬리표 떼기
+    window.history.replaceState({}, '', window.location.pathname);
 }
 
 socket.on('roomJoined', (data) => {
