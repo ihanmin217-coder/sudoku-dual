@@ -93,14 +93,14 @@ socket.on('roomJoined', (data) => {
     window.history.replaceState({}, '', '?room=' + currentRoomCode);
 });
 
-// 💡 4. [1번 완벽 해결] 대기방 명단 렌더링 및 '방장 1P, 2P 지정 버튼' 실시간 활성화
 socket.on('roomStateUpdated', (data) => {
     const room = data.room;
     if (!room) return;
     document.getElementById('roomCodeDisplay').innerText = currentRoomCode;
     
-    const isMeHost = (myId === room.creator.id);
-    document.getElementById('hostConfigBtn').style.display = isMeHost ? 'block' : 'none';
+    // 🛡️ 핵심 수정: isMeHost 일회용 변수를 버리고 전역 변수 isHost를 갱신합니다!
+    isHost = (myId === room.creator.id);
+    document.getElementById('hostConfigBtn').style.display = isHost ? 'block' : 'none';
 
     serverConfigTurnLimit = room.turnLimit || 60;
     serverConfigTurnPref = room.turnPref || 'RANDOM';
@@ -119,8 +119,7 @@ socket.on('roomStateUpdated', (data) => {
         div.style.padding = '5px 10px'; div.style.background = '#fff'; div.style.border = '1px solid #ddd'; div.style.borderRadius = '4px'; div.style.display = 'flex'; div.style.justifyContent = 'space-between'; div.style.alignItems = 'center'; div.style.fontSize = '22px';
         div.innerText = u.isHost ? `👑 ${u.nickname} (방장)` : `👤 ${u.nickname}`;
         
-        // 🛡️ 방장 화면의 명단 옆에만 1P/2P 수동 지정 스위치를 정교하게 달아줍니다!
-        if (isMeHost) {
+        if (isHost && !u.isHost) {
             const btnArea = document.createElement('div'); btnArea.style.display = 'flex'; btnArea.style.gap = '5px';
             const b1 = document.createElement('button'); b1.innerText = '1P 임명'; b1.className = 'btn-small';
             b1.onclick = () => socket.emit('assignSlotTarget', { roomCode: currentRoomCode, targetId: u.id, slot: 1 });
@@ -142,14 +141,14 @@ socket.on('roomStateUpdated', (data) => {
     const canStart = room.p1Id && room.p2Id && p1IsReady && p2IsReady;
 
     const startBtn = document.getElementById('startGameBtn');
-    startBtn.style.display = isMeHost ? 'block' : 'none';
+    startBtn.style.display = isHost ? 'block' : 'none';
     startBtn.disabled = !canStart;
     startBtn.style.opacity = canStart ? '1' : '0.5';
-    if(isMeHost) startBtn.innerText = canStart ? "🎮 게임 시작" : "⏳ 플레이어 준비 대기 중...";
+    if(isHost) startBtn.innerText = canStart ? "🎮 게임 시작" : "⏳ 플레이어 준비 대기 중...";
 
     const readyBtn = document.getElementById('readyBtn');
     const amIPlayer = (myId === room.p1Id || myId === room.p2Id);
-    if (!isMeHost && amIPlayer) {
+    if (!isHost && amIPlayer) {
         readyBtn.style.display = 'block';
         const myReadyState = (myId === room.p1Id) ? room.p1Ready : room.p2Ready;
         readyBtn.innerText = myReadyState ? "✅ 준비 완료 (취소)" : "✅ 게임 준비";
@@ -167,8 +166,10 @@ socket.on('roomStateUpdated', (data) => {
     playerNames[2] = room.p2Name || '후공 대기자';
     const hostCrown = (room.creator.id === room.p1Id) ? ' 👑' : '';
     const guestCrown = (room.creator.id === room.p2Id) ? ' 👑' : '';
-    document.getElementById('p1Info').innerText = `선공: ${playerNames[1]}${hostCrown}`;
-    document.getElementById('p2Info').innerText = `후공: ${playerNames[2]}${guestCrown}`;
+    const p1Info = document.getElementById('p1Info');
+    const p2Info = document.getElementById('p2Info');
+    if(p1Info) p1Info.innerText = `선공: ${playerNames[1]}${hostCrown}`;
+    if(p2Info) p2Info.innerText = `후공: ${playerNames[2]}${guestCrown}`;
 });
 
 function toggleReady() {
@@ -279,7 +280,6 @@ socket.on('moveApproved', (data) => {
     startTimer(); 
 });
 
-// 💡 7. 인게임 글자 색상 및 하이라이트 동적 도색 UI
 function updateUI() {
     if (isSpectatorReviewMode) return; 
 
@@ -290,7 +290,10 @@ function updateUI() {
         
         cell.innerText = val !== 0 ? val : '';
         cell.classList.remove('hoverable', 'highlight-box', 'last-move');
-        cell.style.backgroundColor = "transparent"; cell.style.color = "#222"; 
+        
+        // 🛡️ 핵심 수정: 칸 배경색을 무조건 하얀색으로 깔아줍니다!
+        cell.style.backgroundColor = "#fff"; 
+        cell.style.color = "#222"; 
 
         const moveInfo = gameHistory.find(h => h.row === r && h.col === c);
         if (moveInfo) { cell.style.color = moveInfo.player === 1 ? "#d32f2f" : "#1976d2"; cell.style.fontWeight = "bold"; }
@@ -372,7 +375,13 @@ socket.on('kickedOut', () => { alert("대기방에서 강제 퇴장되었습니�
 function endGame(gameWinner, isSuffocated, isSurrendered) {
     if (isGameOver) return;
     isGameOver = true; clearInterval(timerInterval);
-    try { sndBgm.pause(); sndBgm.currentTime = 0; if(myPlayerNumber === gameWinner) playSound(sndWin); else if (myPlayerNumber!==0) playSound(sndLose); else playSound(sndGameOver); } catch(e) {}
+    
+    try { 
+        sndBgm.pause(); sndBgm.currentTime = 0; 
+        // 🛡️ 기존에 가지고 계시던 gameover.mp3 하나만 재생하도록 원상 복구합니다.
+        playSound(sndGameOver); 
+    } catch(e) {}
+    
     updateUI(); 
     
     const finalWinnerName = playerNames[gameWinner] || '우승자';

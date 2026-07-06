@@ -26,7 +26,6 @@ export class GameGateway implements OnGatewayDisconnect {
       const room = this.matchingRooms[roomCode];
       const gameRoom = this.gameService.getRoom(roomCode);
       
-      // 방이 비밀방(!room.isPrivate)이 아니면서, 게임 대기 중인 방만 목록에 추가
       if (!room.isPrivate && (!gameRoom || gameRoom.isGameOver)) {
         roomList.push({
           roomCode,
@@ -35,6 +34,7 @@ export class GameGateway implements OnGatewayDisconnect {
         });
       }
     }
+    // 🛡️ 누락되었던 핵심 통신 코드: 로비에 있는 모든 사람에게 방 목록 방송!
     this.server.emit('roomListUpdated', roomList); 
   }
 
