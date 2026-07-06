@@ -65,28 +65,28 @@
             <button class="btn-small" style="background: #2c3e50; color: white; margin-left: 10px;" onclick="copyInviteLink()">복사</button>
         </div>
 
-        <div class="config-summary-box">
+        <div class="config-summary-box" style="background: rgba(0,0,0,0.03); padding: 10px; border-radius: 8px; margin-bottom: 15px; font-size: 22px; text-align: center; border: 2px dashed #999;">
             📌 현재 방 설정: <span id="currentConfigSummary" style="font-weight: bold; color: #e67e22;">시간 60초 / 선후공: 랜덤</span>
         </div>
 
-        <div class="slot-container">
-            <div class="slot-row">
-                <span class="slot-label p1-color">🔴 선공 (1P) 자리고정</span>
-                <span id="p1SlotName" class="slot-user">[비어있음 - 방장 임명대기]</span>
+        <div class="slot-container" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;">
+            <div class="slot-row" style="background: #fff; padding: 10px; border: 2px solid #333; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
+                <span class="slot-label p1-color" style="font-size: 24px; font-weight: bold;">🔴 선공 (1P) 자리고정</span>
+                <span id="p1SlotName" class="slot-user" style="font-size: 24px; color:#666;">[비어있음]</span>
             </div>
-            <div class="slot-row">
-                <span class="slot-label p2-color">🔵 후공 (2P) 자리고정</span>
-                <span id="p2SlotName" class="slot-user">[비어있음 - 방장 임명대기]</span>
+            <div class="slot-row" style="background: #fff; padding: 10px; border: 2px solid #333; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
+                <span class="slot-label p2-color" style="font-size: 24px; font-weight: bold;">🔵 후공 (2P) 자리고정</span>
+                <span id="p2SlotName" class="slot-user" style="font-size: 24px; color:#666;">[비어있음]</span>
             </div>
         </div>
 
-        <div style="font-size: 24px; font-weight: bold; margin-bottom: 5px;">참가자 명단 (<span id="participantCount">1</span>/9)</div>
-        <div id="waitUserList" class="user-list-box"></div>
+        <div style="font-size: 24px; font-weight: bold; margin-bottom: 5px; text-align: left;">참가자 명단 (<span id="participantCount">1</span>/9)</div>
+        <div id="waitUserList" class="user-list-box" style="display: flex; flex-direction: column; gap: 5px; margin-bottom: 20px; max-height: 150px; overflow-y: auto;"></div>
 
         <div class="chat-container">
             <div class="chat-messages" id="waitChatMessages"></div>
             <div class="chat-input-area">
-                <input type="text" id="waitChatInput" class="chat-input" placeholder="대기실 대화 나누기..." onkeypress="if(event.keyCode==13) sendRoomChat('wait')">
+                <input type="text" id="waitChatInput" class="chat-input" placeholder="대기실 대화 나누기...">
                 <button class="btn-chat-send" onclick="sendRoomChat('wait')">전송</button>
             </div>
         </div>
@@ -94,14 +94,14 @@
         <div style="display: flex; gap: 10px; margin-top: 20px;">
             <button class="btn-main" onclick="backToMainLobby()" style="background: #95a5a6; flex: 1;">🚪 나가기</button>
             <button class="btn-main" id="readyBtn" onclick="toggleReady()" style="background: #3498db; flex: 2; display: none;">✅ 게임 준비</button>
-            <button class="btn-main" id="startGameBtn" onclick="requestStartGame()" style="background: #2ecc71; flex: 2; display: none;" disabled>⏳ 플레이어 준비 대기 중...</button>
+            <button class="btn-main" id="startGameBtn" onclick="requestStartGame()" style="background: #2ecc71; flex: 2; display: none;" disabled>⏳ 대기 중...</button>
         </div>
     </div>
 
     <div class="container" id="gameContainer" style="display: none; position: relative; padding-bottom: 90px; margin-top: 30px;">
         <div class="title-text" style="font-size: 40px; margin-bottom: 10px; text-align: center;">스도쿠 듀얼 - 매칭전</div>
         
-        <div class="player-info-bar">
+        <div style="display: flex; justify-content: space-between; font-size: 28px; margin-bottom: 10px; background: rgba(0,0,0,0.05); padding: 10px; border-radius: 8px;">
             <div id="p1Info" class="p1-color" style="font-weight: bold;">선공: -</div>
             <div id="p2Info" class="p2-color" style="font-weight: bold;">후공: -</div>
         </div>
@@ -123,11 +123,16 @@
         </div>
 
         <div id="spectatorReviewControls" class="review-panel spec-theme" style="display: none;">
-            <div class="review-title" style="color: #0d47a1;">🔎 실시간 복기 모드 (관전자 전용)</div>
-            <div class="review-btn-group">
+            <div class="review-title" style="color: #0d47a1; font-size: 22px; font-weight: bold; margin-bottom: 5px; text-align: center;">🔎 실시간 복기 모드 (관전자 전용)</div>
+            <div class="review-btn-group" style="display: flex; justify-content: center; gap: 8px; align-items: center; flex-wrap: wrap;">
                 <button class="btn-small" style="background: #78909c;" onclick="jumpToReviewStep(0)">⏮ 처음</button>
                 <button class="btn-small" style="background: #1976d2;" onclick="stepSpectatorReplay(-1)">◀ 이전</button>
-                <span id="specReplayStatus" class="review-status-text">라이브 중</span>
+                
+                <div style="display: inline-flex; align-items: center; gap: 3px; font-size: 22px; font-weight: bold;">
+                    <input type="number" id="specMoveDirectInput" min="0" value="0" style="width: 50px; text-align: center; font-size: 20px; border: 2px solid #333; border-radius: 4px;" onkeypress="if(event.keyCode==13) directJumpFromInput('spec')">
+                    <span id="specReplayStatus">/ 0 턴</span>
+                </div>
+
                 <button class="btn-small" style="background: #1976d2;" onclick="stepSpectatorReplay(1)">다음 ▶</button>
                 <button class="btn-small" style="background: #78909c;" onclick="jumpToReviewStep(gameHistory.length)">⏭ 끝</button>
                 <button class="btn-small" style="background: #2e7d32;" id="specLiveBtn" onclick="returnToLiveSpectate()">🔴 라이브 보기</button>
@@ -136,22 +141,27 @@
         </div>
 
         <div id="playerReviewControls" class="review-panel player-theme" style="display: none;">
-            <div class="review-title" style="color: #d35400;">🏆 게임 종료 후 복기 모드</div>
-            <div class="review-btn-group">
+            <div class="review-title" style="color: #d35400; font-size: 22px; font-weight: bold; margin-bottom: 5px; text-align: center;">🏆 게임 종료 후 복기 모드</div>
+            <div class="review-btn-group" style="display: flex; justify-content: center; gap: 8px; align-items: center; flex-wrap: wrap;">
                 <button class="btn-small" style="background: #78909c;" onclick="jumpToReviewStep(0)">⏮ 처음</button>
                 <button class="btn-small" style="background: #e67e22;" onclick="stepSpectatorReplay(-1)">◀ 이전</button>
-                <span id="playerReplayStatus" class="review-status-text">복기 중</span>
+                
+                <div style="display: inline-flex; align-items: center; gap: 3px; font-size: 22px; font-weight: bold;">
+                    <input type="number" id="playerMoveDirectInput" min="0" value="0" style="width: 50px; text-align: center; font-size: 20px; border: 2px solid #333; border-radius: 4px;" onkeypress="if(event.keyCode==13) directJumpFromInput('player')">
+                    <span id="playerReplayStatus">/ 0 턴</span>
+                </div>
+
                 <button class="btn-small" style="background: #e67e22;" onclick="stepSpectatorReplay(1)">다음 ▶</button>
                 <button class="btn-small" style="background: #78909c;" onclick="jumpToReviewStep(gameHistory.length)">⏭ 끝</button>
                 <button class="btn-small" style="background: #c0392b;" id="showResultBtn" onclick="showGameOverScreenAgain()">🏆 결과창 보기</button>
             </div>
         </div>
 
-        <div class="in-game-action-row">
-            <button id="inGameSurrenderBtn" onclick="surrender()" class="btn-surrender">🏳️ 기권하기</button>
+        <div class="in-game-action-row" style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px;">
+            <button id="inGameSurrenderBtn" onclick="surrender()" class="btn-surrender" style="font-size: 20px; background: #e74c3c; color: white; border: 3px solid #333; border-radius: 8px; padding: 8px 15px; font-weight: bold;">🏳️ 기권하기</button>
             <div style="position: relative;">
-                <button onclick="toggleEmoticonPanel()" class="btn-emoji-trigger">💬</button>
-                <div class="emoticon-panel" id="emoticonPanel" style="display: none;">
+                <button onclick="toggleEmoticonPanel()" class="btn-emoji-trigger" style="font-size: 24px; background: #fcf8eb; border: 3px solid #333; border-radius: 50%; width: 50px; height: 50px;">💬</button>
+                <div class="emoticon-panel" id="emoticonPanel" style="display: none; position: absolute; bottom: 60px; right: 0; z-index: 10000; width: 220px;">
                     <button class="emoticon-btn" onclick="sendEmoticon('🤔')">🤔</button>
                     <button class="emoticon-btn" onclick="sendEmoticon('👏')">👏</button>
                     <button class="emoticon-btn" onclick="sendEmoticon('😭')">😭</button>
@@ -177,27 +187,27 @@
 
     <div id="configModal" class="modal-overlay" style="display: none;">
         <div class="modal-content">
-            <div class="modal-title">⚙️ 스도쿠 듀얼 매치 설정</div>
-            <div class="modal-form-group">
-                <label class="modal-label">⏱️ 한 턴당 시간 제한</label>
-                <select id="modalTurnLimit" class="modal-select">
+            <div class="modal-title" style="font-size: 32px; font-weight: bold; text-align: center; margin-bottom: 20px;">⚙️ 스도쿠 듀얼 매치 설정</div>
+            <div class="modal-form-group" style="margin-bottom: 15px;">
+                <label class="modal-label" style="font-size: 24px; font-weight: bold; display: block; margin-bottom: 5px;">⏱️ 한 턴당 시간 제한</label>
+                <select id="modalTurnLimit" class="modal-select" style="width: 100%; font-size: 22px; padding: 5px; border: 2px solid #333; border-radius: 6px;">
                     <option value="30">30초 (속전속결)</option>
                     <option value="60" selected>60초 (표준 대국)</option>
                     <option value="90">90초 (장고 모드)</option>
                     <option value="120">120초 (무제한급 수읽기)</option>
                 </select>
             </div>
-            <div class="modal-form-group">
-                <label class="modal-label">👑 선공권 배정 설정</label>
-                <select id="modalTurnPref" class="modal-select">
+            <div class="modal-form-group" style="margin-bottom: 25px;">
+                <label class="modal-label" style="font-size: 24px; font-weight: bold; display: block; margin-bottom: 5px;">👑 선공권 배정 설정</label>
+                <select id="modalTurnPref" class="modal-select" style="width: 100%; font-size: 22px; padding: 5px; border: 2px solid #333; border-radius: 6px;">
                     <option value="RANDOM" selected>🎲 완전 랜덤 공평 배정</option>
                     <option value="P1_FIRST">🔴 1P 슬롯 유저 무조건 선공</option>
                     <option value="P2_FIRST">🔵 2P 슬롯 유저 무조건 선공</option>
                 </select>
             </div>
             <div style="display: flex; gap: 10px;">
-                <button onclick="closeConfigModal()" class="btn-modal-action bg-red">취소</button>
-                <button onclick="saveConfigFromModal()" class="btn-modal-action bg-green">설정 적용</button>
+                <button onclick="closeConfigModal()" class="btn-modal-action bg-red" style="flex: 1; font-size: 22px; padding: 8px; background: #e74c3c; color: white; border: 2px solid #333; border-radius: 6px;">취소</button>
+                <button onclick="saveConfigFromModal()" class="btn-modal-action bg-green" style="flex: 1; font-size: 22px; padding: 8px; background: #2ecc71; color: white; border: 2px solid #333; border-radius: 6px;">설정 적용</button>
             </div>
         </div>
     </div>
