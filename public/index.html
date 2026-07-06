@@ -80,6 +80,12 @@
             <button class="btn-main" onclick="backToMainLobby()" style="background: #95a5a6; flex: 1;">🚪 나가기</button>
             <button class="btn-main" id="startGameBtn" onclick="requestStartGame()" style="background: #2ecc71; flex: 2; display: none;">🎮 게임 시작</button>
         </div>
+
+        <div style="display: flex; gap: 10px; margin-top: 20px;">
+            <button class="btn-main" onclick="backToMainLobby()" style="background: #95a5a6; flex: 1;">🚪 나가기</button>
+            <button class="btn-main" id="readyBtn" onclick="toggleReady()" style="background: #3498db; flex: 2; display: none;">✅ 게임 준비</button>
+            <button class="btn-main" id="startGameBtn" onclick="requestStartGame()" style="background: #2ecc71; flex: 2; display: none;" disabled>⏳ 플레이어 준비 대기 중...</button>
+        </div>
     </div>
 
     <div class="container" id="gameContainer" style="display: none; position: relative; padding-bottom: 90px; margin-top: 30px;">

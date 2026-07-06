@@ -172,12 +172,15 @@ export class GameGateway implements OnGatewayDisconnect {
   }
 
   @SubscribeMessage('toggleReady')
-  handleToggleReady(@MessageBody() roomCode: string, @ConnectedSocket() client: Socket) {
-    const room = this.matchingRooms[roomCode];
-    if (room) {
-      const guest = room.guests.find((g: any) => g.id === client.id);
-      if (guest) { guest.isReady = !guest.isReady; this.broadcastRoomState(roomCode); }
-    }
+  handleToggleReady(@ConnectedSocket() client: Socket, @MessageBody() data: any) {
+    const room = this.matchingRooms[data.roomCode];
+    if (!room) return;
+    
+    // 신호를 보낸 사람이 1P면 1P 레디 갱신, 2P면 2P 레디 갱신
+    if (room.p1Id === client.id) room.p1Ready = data.isReady;
+    if (room.p2Id === client.id) room.p2Ready = data.isReady;
+    
+    this.server.to(data.roomCode).emit('roomStateUpdated', { room, isGameRoomOver: true });
   }
 
   @SubscribeMessage('selectOpponent')
@@ -236,34 +239,32 @@ export class GameGateway implements OnGatewayDisconnect {
     });
   }
 
-  // 💡 [교체] 방장이 '게임 시작'을 눌렀을 때 작동하는 함수 전체 교체
   @SubscribeMessage('startGame')
-  handleStartGame(@MessageBody() data: { roomCode: string; turnPref: string }, @ConnectedSocket() client: Socket) {
+  handleStartGame(@ConnectedSocket() client: Socket, @MessageBody() data: any) {
     const room = this.matchingRooms[data.roomCode];
-    if (!room || room.creator.id !== client.id || !room.selectedGuestId) return;
-
-    const selectedGuest = room.guests.find((g: any) => g.id === room.selectedGuestId);
-    if (!selectedGuest || !selectedGuest.isReady) return; 
-
-    let creatorRole = 1;
-    if (data.turnPref === 'P2') creatorRole = 2;
-    else if (data.turnPref === 'RANDOM') creatorRole = Math.random() < 0.5 ? 1 : 2;
-    const guestRole = creatorRole === 1 ? 2 : 1;
-
-    this.gameService.createGameState(data.roomCode);
-    const gameRoom = this.gameService.getRoom(data.roomCode);
     
-    gameRoom.players[creatorRole] = room.creator;
-    gameRoom.players[guestRole] = selectedGuest;
+    // 오직 방장만 쏠 수 있는 신호인지 1차 검증
+    if (!room || room.creator.id !== client.id) return;
+    
+    // 1P, 2P 자리가 꽉 찼는지 2차 검증
+    if (!room.p1Id || !room.p2Id) return;
 
-    // 💡 [핵심 버그 픽스] 기존에 따로 보내던 roleAssigned 신호를 없애고, 
-    // 게임 시작(gameStart) 신호를 보낼 때 유저들의 역할(roles)을 아예 한 통에 묶어서 보냅니다!
+    // 모두 준비 완료 상태인지 최종 검증 (방장은 무조건 준비 완료로 취급)
+    const p1IsReady = room.p1Ready || (room.p1Id === room.creator.id);
+    const p2IsReady = room.p2Ready || (room.p2Id === room.creator.id);
+    if (!p1IsReady || !p2IsReady) return;
+
+    // 참가자들에게 부여될 진짜 역할(1P, 2P) 패키징
+    const roles: Record<string, number> = {};
+    roles[room.p1Id] = 1; // 서버 엔진에서 1P
+    roles[room.p2Id] = 2; // 서버 엔진에서 2P
+
+    // 전원에게 게임 시작 팡파레 송출!
     this.server.to(data.roomCode).emit('gameStart', {
-      players: { 1: gameRoom.players[1].nickname, 2: gameRoom.players[2].nickname },
-      roles: { [room.creator.id]: creatorRole, [selectedGuest.id]: guestRole },
-      turnLimit: room.turnLimit // 💡 [신규 추가] 결정된 턴 시간을 브라우저에 전달
+      roles: roles,
+      turnLimit: room.turnLimit || 60,
+      turnPref: room.turnPref || 'RANDOM'
     });
-    this.broadcastRoomList();
   }
 
   // 💡 [에러 해결] 타입스크립트의 깐깐한 경고를 회피(as any)하고, 서버 함수가 없어도 프론트엔드를 믿고 패스시키는 무적 로직
@@ -420,35 +421,23 @@ export class GameGateway implements OnGatewayDisconnect {
   @SubscribeMessage('assignSlotTarget')
   handleAssignSlotTarget(@ConnectedSocket() client: Socket, @MessageBody() data: any) {
     const room = this.matchingRooms[data.roomCode];
-    if (!room) return;
-
-    // 오직 방장만 자리 배치 권한이 있음
-    if (room.creator.id !== client.id) return;
+    if (!room || room.creator.id !== client.id) return;
 
     let targetName = '';
-    // 타겟이 방장 본인인지, 게스트인지 확인
-    if (room.creator.id === data.targetId) {
-      targetName = room.creator.nickname;
-    } else {
+    if (room.creator.id === data.targetId) targetName = room.creator.nickname;
+    else {
       const guest = room.guests.find((g: any) => g.id === data.targetId);
       if (guest) targetName = guest.nickname;
     }
-
     if (!targetName) return;
 
-    // 선택된 슬롯에 따라 아이디와 닉네임 배정
     if (data.slot === 1) {
-      if (room.p2Id === data.targetId) { room.p2Id = null; room.p2Name = null; }
-      room.p1Id = data.targetId; room.p1Name = targetName;
+      if (room.p2Id === data.targetId) { room.p2Id = null; room.p2Name = null; room.p2Ready = false; }
+      room.p1Id = data.targetId; room.p1Name = targetName; room.p1Ready = false; // 레디 초기화
     } else if (data.slot === 2) {
-      if (room.p1Id === data.targetId) { room.p1Id = null; room.p1Name = null; }
-      room.p2Id = data.targetId; room.p2Name = targetName;
+      if (room.p1Id === data.targetId) { room.p1Id = null; room.p1Name = null; room.p1Ready = false; }
+      room.p2Id = data.targetId; room.p2Name = targetName; room.p2Ready = false; // 레디 초기화
     }
-
-    // 대결 상대(SelectedGuestId) 자동 정렬
-    room.selectedGuestId = null;
-    if (room.p1Id && room.p1Id !== room.creator.id) room.selectedGuestId = room.p1Id;
-    if (room.p2Id && room.p2Id !== room.creator.id) room.selectedGuestId = room.p2Id;
 
     this.server.to(data.roomCode).emit('roomStateUpdated', { room, isGameRoomOver: true });
   }

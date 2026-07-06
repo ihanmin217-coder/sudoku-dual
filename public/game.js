@@ -126,18 +126,19 @@ socket.on('roomStateUpdated', (data) => {
     if (!room) return;
     document.getElementById('roomCodeDisplay').innerText = currentRoomCode;
     
-    // 🛡️ socket.id는 가끔 꼬일 수 있으므로, 확실한 myId를 기준으로 방장 권한을 부여합니다. (버그 4 해결)
-    const isMeHost = (myId === room.creator.id);
-    document.getElementById('hostConfigBtn').style.display = isMeHost ? 'block' : 'none';
-    document.getElementById('startGameBtn').style.display = isMeHost ? 'block' : 'none';
+    isHost = (myId === room.creator.id);
+    document.getElementById('hostConfigBtn').style.display = isHost ? 'block' : 'none';
 
-    // 방 설정 요약본 업데이트
+    // 방 설정 요약
     const prefText = room.turnPref === 'RANDOM' ? '🎲 랜덤' : (room.turnPref === 'P1_FIRST' ? '🔴 1P 선공' : '🔵 2P 후공');
     const limitText = room.turnLimit ? room.turnLimit : 60;
     const configSummary = document.getElementById('currentConfigSummary');
     if (configSummary) configSummary.innerText = `시간 ${limitText}초 / 선후공: ${prefText}`;
 
-    // 참가자 명단 렌더링
+    // 모달창 동기화
+    serverConfigTurnLimit = room.turnLimit || 60;
+    serverConfigTurnPref = room.turnPref || 'RANDOM';
+
     const waitUserList = document.getElementById('waitUserList');
     waitUserList.innerHTML = '';
     let users = [{ id: room.creator.id, nickname: room.creator.nickname, isHost: true }];
@@ -150,8 +151,7 @@ socket.on('roomStateUpdated', (data) => {
         div.style.borderRadius = '4px'; div.style.display = 'flex'; div.style.justifyContent = 'space-between'; div.style.alignItems = 'center'; div.style.fontSize = '22px';
         div.innerText = u.isHost ? `👑 ${u.nickname} (방장)` : `👤 ${u.nickname}`;
         
-        // 🛡️ 방장인 경우, '자신을 포함한' 모든 유저 옆에 1P/2P 임명 버튼을 띄워줍니다! (버그 3 해결)
-        if (isMeHost) {
+        if (isHost) {
             const btnArea = document.createElement('div'); btnArea.style.display = 'flex'; btnArea.style.gap = '5px';
             const b1 = document.createElement('button'); b1.innerText = '1P 임명'; b1.className = 'btn-small';
             b1.onclick = () => socket.emit('assignSlotTarget', { roomCode: currentRoomCode, targetId: u.id, slot: 1 });
@@ -162,11 +162,42 @@ socket.on('roomStateUpdated', (data) => {
         waitUserList.appendChild(div);
     });
 
-    document.getElementById('p1SlotName').innerText = room.p1Name ? room.p1Name : `[비어있음]`;
-    document.getElementById('p2SlotName').innerText = room.p2Name ? room.p2Name : `[비어있음]`;
+    // 🛡️ [레디 시스템 록다운] 방장은 레디 면제(자동 완료), 게스트는 레디 필수!
+    const p1IsReady = room.p1Ready || (room.p1Id && room.p1Id === room.creator.id);
+    const p2IsReady = room.p2Ready || (room.p2Id && room.p2Id === room.creator.id);
+    
+    // 1P, 2P가 모두 채워져 있고 둘 다 레디 상태여야만 시작 가능
+    const canStart = room.p1Id && room.p2Id && p1IsReady && p2IsReady;
+
+    const startBtn = document.getElementById('startGameBtn');
+    startBtn.style.display = isHost ? 'block' : 'none';
+    startBtn.disabled = !canStart;
+    startBtn.style.opacity = canStart ? '1' : '0.5';
+    if(isHost) startBtn.innerText = canStart ? "🎮 게임 시작" : "⏳ 플레이어 준비 대기 중...";
+
+    // 🛡️ 게스트 전용: 내가 1P나 2P로 임명되었다면 [게임 준비] 버튼 노출
+    const readyBtn = document.getElementById('readyBtn');
+    const amIPlayer = (myId === room.p1Id || myId === room.p2Id);
+    
+    if (!isHost && amIPlayer) {
+        readyBtn.style.display = 'block';
+        isReady = (myId === room.p1Id) ? room.p1Ready : room.p2Ready;
+        readyBtn.innerText = isReady ? "✅ 준비 완료 (취소)" : "✅ 게임 준비";
+        readyBtn.style.background = isReady ? "#e67e22" : "#3498db";
+    } else {
+        readyBtn.style.display = 'none'; // 관전자거나 방장이면 숨김
+    }
+
+    // 슬롯 렌더링
+    const p1ReadyText = p1IsReady && room.p1Id ? " [✅준비 완료]" : "";
+    const p2ReadyText = p2IsReady && room.p2Id ? " [✅준비 완료]" : "";
+
+    document.getElementById('p1SlotName').innerText = room.p1Name ? `${room.p1Name}${p1ReadyText}` : `[비어있음]`;
+    document.getElementById('p2SlotName').innerText = room.p2Name ? `${room.p2Name}${p2ReadyText}` : `[비어있음]`;
     
     playerNames[1] = room.p1Name || '선공 대기자';
     playerNames[2] = room.p2Name || '후공 대기자';
+    
     const hostCrown = (room.creator.id === room.p1Id) ? ' 👑' : '';
     const guestCrown = (room.creator.id === room.p2Id) ? ' 👑' : '';
     const p1Info = document.getElementById('p1Info');
@@ -321,7 +352,22 @@ function selectNumber(num) {
     if (isOpeningSelection) socket.emit('playerMove', { roomCode: currentRoomCode, move: { number: num, isOpening: true } });
     else socket.emit('playerMove', { roomCode: currentRoomCode, move: { row: selectedRow, col: selectedCol, number: num, isOpening: false } });
 }
-function openConfigModal() { if(myPlayerNumber === 1) { document.getElementById('modalTurnLimit').value = serverConfigTurnLimit; document.getElementById('modalTurnPref').value = serverConfigTurnPref; document.getElementById('configModal').style.display = 'flex'; } }
+let isHost = false; 
+let isReady = false; // 내 레디 상태 저장
+
+function openConfigModal() { 
+    if (!isHost) return alert("게임 설정 변경은 방장만 가능합니다!"); 
+    document.getElementById('modalTurnLimit').value = serverConfigTurnLimit; 
+    document.getElementById('modalTurnPref').value = serverConfigTurnPref; 
+    document.getElementById('configModal').style.display = 'flex'; 
+}
+
+function toggleReady() {
+    isReady = !isReady;
+    document.getElementById('readyBtn').innerText = isReady ? "✅ 준비 완료 (취소)" : "✅ 게임 준비";
+    socket.emit('toggleReady', { roomCode: currentRoomCode, isReady: isReady });
+}
+
 function closeConfigModal() { document.getElementById('configModal').style.display = 'none'; }
 function saveConfigFromModal() {
     serverConfigTurnLimit = parseInt(document.getElementById('modalTurnLimit').value);
