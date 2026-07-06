@@ -40,15 +40,22 @@ const sndWin = new Audio('win.mp3');
 const sndLose = new Audio('lose.mp3');
 const emojiSounds = { '🤔': new Audio('hmm.mp3'), '👏': new Audio('clap.mp3'), '😭': new Audio('cry.mp3'), '😡': new Audio('angry.mp3'), '😎': new Audio('cool.mp3'), '😱': new Audio('scream.mp3') };
 
-function toggleMute() {
-    isMuted = !isMuted;
-    document.getElementById('muteBtn').innerText = isMuted ? "🔇 소리 켜기" : "🔊 소리 끄기";
-    if (isMuted) sndBgm.pause();
-    else if (isGameStarted && !isGameOver) sndBgm.play().catch(()=>{});
-}
+let bgmVol = 0.3; 
+let sfxVol = 1.0;
+
+function openVolumeModal() { document.getElementById('volumeModal').style.display = 'flex'; }
+function closeVolumeModal() { document.getElementById('volumeModal').style.display = 'none'; }
+
+document.getElementById('bgmVolumeSlider').addEventListener('input', (e) => { 
+    bgmVol = e.target.value; 
+    sndBgm.volume = bgmVol; 
+    if(bgmVol > 0 && isGameStarted && !isGameOver) sndBgm.play().catch(()=>{});
+});
+document.getElementById('sfxVolumeSlider').addEventListener('input', (e) => { sfxVol = e.target.value; });
+
 function playSound(snd) {
-    if (isMuted) return;
-    try { snd.currentTime = 0; snd.play().catch(e=>{}); } catch(e) {}
+    if (sfxVol == 0) return;
+    try { snd.volume = sfxVol; snd.currentTime = 0; snd.play().catch(e=>{}); } catch(e) {}
 }
 
 // 💡 URL 파라미터 감지 (누군가 초대 링크로 들어왔을 때 방 코드 자동 기입)
@@ -151,13 +158,21 @@ socket.on('roomStateUpdated', (data) => {
         div.style.borderRadius = '4px'; div.style.display = 'flex'; div.style.justifyContent = 'space-between'; div.style.alignItems = 'center'; div.style.fontSize = '22px';
         div.innerText = u.isHost ? `👑 ${u.nickname} (방장)` : `👤 ${u.nickname}`;
         
-        if (isHost) {
+        if (isHost && !u.isHost) {
             const btnArea = document.createElement('div'); btnArea.style.display = 'flex'; btnArea.style.gap = '5px';
             const b1 = document.createElement('button'); b1.innerText = '1P 임명'; b1.className = 'btn-small';
             b1.onclick = () => socket.emit('assignSlotTarget', { roomCode: currentRoomCode, targetId: u.id, slot: 1 });
             const b2 = document.createElement('button'); b2.innerText = '2P 임명'; b2.className = 'btn-small';
             b2.onclick = () => socket.emit('assignSlotTarget', { roomCode: currentRoomCode, targetId: u.id, slot: 2 });
-            btnArea.appendChild(b1); btnArea.appendChild(b2); div.appendChild(btnArea);
+            
+            // 💡 [요청 3] 방장 전용 위임 & 추방 버튼 추가!
+            const b3 = document.createElement('button'); b3.innerText = '방장 위임'; b3.className = 'btn-small'; b3.style.background = '#f1c40f';
+            b3.onclick = () => socket.emit('delegateHost', { roomCode: currentRoomCode, targetId: u.id });
+            const b4 = document.createElement('button'); b4.innerText = '추방'; b4.className = 'btn-small'; b4.style.background = '#e74c3c'; b4.style.color = 'white';
+            b4.onclick = () => socket.emit('kickUser', { roomCode: currentRoomCode, targetId: u.id });
+
+            btnArea.appendChild(b1); btnArea.appendChild(b2); btnArea.appendChild(b3); btnArea.appendChild(b4);
+            div.appendChild(btnArea);
         }
         waitUserList.appendChild(div);
     });
@@ -236,31 +251,41 @@ socket.on('gameStart', (data) => {
 });
 
 function initBoard() {
+    const boardEl = document.getElementById('sudokuBoard');
+    boardEl.innerHTML = ''; // 기존 보드판 초기화
     board = Array.from({length: 9}, () => Array(9).fill(0));
-    const cells = document.querySelectorAll('.cell');
-    
-    cells.forEach(cell => {
-        cell.innerText = ''; cell.style.backgroundColor = "transparent"; cell.classList.remove('hoverable', 'highlight-box', 'last-move');
-        cell.onclick = function() {
-            if (!isGameStarted || isGameOver || isSpectatorReviewMode || currentPlayer !== myPlayerNumber) return;
-            const r = parseInt(this.dataset.row); const c = parseInt(this.dataset.col);
-            if (board[r][c] !== 0) return; 
 
-            const bigBox = getBoxFromRowCol(r, c);
-            if (requiredNextBox !== null && bigBox !== requiredNextBox) return;
+    // 81개의 div(칸)를 생성합니다.
+    for (let r = 0; r < 9; r++) {
+        for (let c = 0; c < 9; c++) {
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            cell.dataset.row = r;
+            cell.dataset.col = c;
+            
+            // 칸을 눌렀을 때의 룰 적용 로직
+            cell.onclick = function() {
+                if (!isGameStarted || isGameOver || isSpectatorReviewMode || currentPlayer !== myPlayerNumber) return;
+                const row = parseInt(this.dataset.row); const col = parseInt(this.dataset.col);
+                if (board[row][col] !== 0) return; 
 
-            if (isFirstTurn && isOpeningPhase === false) {
-                // 선공의 역사적인 첫 배치!
-                socket.emit('playerMove', { roomCode: currentRoomCode, move: { row: r, col: c, number: openingNumber, bigBox: bigBox, isOpening: false } });
-            } else {
-                openNumpadModal(false, r, c); 
-            }
-        };
-    });
+                const bigBox = getBoxFromRowCol(row, col);
+                if (requiredNextBox !== null && bigBox !== requiredNextBox) return;
+
+                if (isFirstTurn && isOpeningPhase === false) {
+                    socket.emit('playerMove', { roomCode: currentRoomCode, move: { row: row, col: col, number: openingNumber, bigBox: bigBox, isOpening: false } });
+                } else {
+                    openNumpadModal(false, row, col); 
+                }
+            };
+            boardEl.appendChild(cell);
+        }
+    }
     
     isOpeningPhase = true; isFirstTurn = true; currentPlayer = 1; requiredNextBox = null;
     if (myPlayerNumber === 2) openNumpadModal(true); 
 }
+
 function getBoxFromRowCol(r, c) { return Math.floor(r / 3) * 3 + Math.floor(c / 3) + 1; }
 
 // 💡 5. 코어 룰 엔진 (서버 데이터 수신부)
@@ -391,6 +416,7 @@ function startTimer() {
         if (timeLeft <= 0) { clearInterval(timerInterval); if (currentPlayer === myPlayerNumber) surrender(); }
     }, 1000);
 }
+
 function surrender() { socket.emit('surrender', { roomCode: currentRoomCode }); }
 
 socket.on('gameOver', (data) => { endGame(data.winner, data.isSuffocated, data.isSurrendered); });
@@ -464,7 +490,13 @@ socket.on('receiveChatMessage', (data) => {
     if(gameChat) { gameChat.appendChild(msgDiv); gameChat.scrollTop = gameChat.scrollHeight; }
 });
 function toggleEmoticonPanel() { const panel = document.getElementById('emoticonPanel'); panel.style.display = panel.style.display === 'none' ? 'grid' : 'none'; }
-function sendEmoticon(emoji) { toggleEmoticonPanel(); socket.emit('sendEmoticon', { roomCode: currentRoomCode, emoji: emoji }); }
+
+function sendEmoticon(emoji) { 
+    toggleEmoticonPanel(); 
+    const myNick = document.getElementById('nicknameInput').value || '익명';
+    socket.emit('sendEmoticon', { roomCode: currentRoomCode, emoji: emoji, nickname: myNick }); 
+}
+
 socket.on('receiveEmoticon', (data) => {
     const emojiStr = data.emoji; if(emojiSounds[emojiStr]) playSound(emojiSounds[emojiStr]);
     const floating = document.createElement('div'); floating.innerText = `${data.nickname}: ${emojiStr}`; floating.style.position = 'absolute'; floating.style.left = '50%'; floating.style.bottom = '100px'; floating.style.transform = 'translateX(-50%)'; floating.style.fontSize = '30px'; floating.style.fontWeight = 'bold'; floating.style.color = '#fff'; floating.style.textShadow = '0 0 10px #000'; floating.style.zIndex = '9999'; floating.style.animation = 'floatUp 2s ease-out forwards';
@@ -490,6 +522,11 @@ socket.on('roomListUpdated', (roomList) => {
                          <button class="btn-small" style="background:#3498db; color:white;" onclick="document.getElementById('joinCodeInput').value='${r.roomCode}'; joinRoomByCode();">입장</button>`;
         container.appendChild(div);
     });
+});
+
+socket.on('kickedOut', () => {
+    alert("방장에 의해 대기방에서 강제 퇴장되었습니다.");
+    backToMainLobby();
 });
 
 // 💡 [버그 2 해결] 뒤로 가기나 탭 닫기 등 비정상적인 종료 시, 서버에 확실하게 방 나가기 신호를 쏘고 죽는 방어막

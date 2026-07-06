@@ -139,6 +139,8 @@ export class GameGateway implements OnGatewayDisconnect {
     client.join(roomCode);
     client.emit('roomJoined', { roomCode, isHost: true, myId: client.id });
     if (typeof (this as any).broadcastRoomList === 'function') (this as any).broadcastRoomList();
+
+    this.server.to(roomCode).emit('roomStateUpdated', { room: this.matchingRooms[roomCode] });
   }
 
   // 💡 [신규] 방 코드를 직접 치고 들어오거나, 고유 링크(URL)를 타고 들어오는 유저 처리
@@ -229,16 +231,6 @@ export class GameGateway implements OnGatewayDisconnect {
     }
   }
 
-  // 💡 [신규] 이모티콘 채팅 기능
-  // 💡 [교체/확인] 이모티콘 및 텍스트 매크로 방송 함수
-  @SubscribeMessage('sendEmoticon')
-  handleSendEmoticon(@MessageBody() data: { roomCode: string; emoticon: string; nickname: string }) {
-    this.server.to(data.roomCode).emit('receiveEmoticon', {
-      nickname: data.nickname,
-      emoticon: data.emoticon
-    });
-  }
-
   @SubscribeMessage('startGame')
   handleStartGame(@ConnectedSocket() client: Socket, @MessageBody() data: any) {
     const room = this.matchingRooms[data.roomCode];
@@ -301,6 +293,19 @@ export class GameGateway implements OnGatewayDisconnect {
         }
       });
 
+      let result = { success: true, isGameOver: false, isSuffocated: false, message: '' };
+
+    if (data.move.isOpening) {
+      result.success = true; // 오프닝 숫자는 좌표가 없으므로 무조건 승인!
+    } else {
+      // 일반 배치일 때만 게임 엔진(makeMove) 가동
+      if (typeof gameServiceAny.makeMove === 'function') {
+        result = gameServiceAny.makeMove(roomCode, client.id, data.move.row, data.move.col, data.move.number);
+      } else if (typeof gameServiceAny.placeNumber === 'function') {
+        result = gameServiceAny.placeNumber(roomCode, client.id, data.move.row, data.move.col, data.move.number);
+      }
+    }
+
       // 서버 로직에서 게임 종료(승리)가 판정되었다면 결과창을 띄우라고 지시합니다.
       if (result.isGameOver || (gameRoom && gameRoom.isGameOver)) {
         this.server.to(roomCode).emit('gameOver', {
@@ -312,25 +317,6 @@ export class GameGateway implements OnGatewayDisconnect {
     } else {
       // 서버 규칙에 어긋났을 경우 튕겨냅니다.
       client.emit('moveRejected', { reason: result.message });
-    }
-  }
-
-  // 💡 [버그 픽스] 서버가 승자를 직접 결정하여 '전체'에게 항복 방송
-  @SubscribeMessage('playerSurrender')
-  handleSurrender(@MessageBody() roomCode: string, @ConnectedSocket() client: Socket) {
-    const gameRoom = this.gameService.getRoom(roomCode);
-    if (!gameRoom) return;
-    
-    gameRoom.isGameOver = true;
-    
-    let loserRole = 0;
-    if (gameRoom.players[1]?.id === client.id) loserRole = 1;
-    else if (gameRoom.players[2]?.id === client.id) loserRole = 2;
-
-    if (loserRole !== 0) {
-      const winnerRole = loserRole === 1 ? 2 : 1;
-      // 💡 [핵심 수정] 항복 시에도 gameRoom.history를 클라이언트에게 전송합니다!
-      this.server.to(roomCode).emit('gameSurrendered', { winnerRole, history: gameRoom.history });
     }
   }
 
@@ -449,6 +435,60 @@ export class GameGateway implements OnGatewayDisconnect {
     // 기존에 완벽하게 만들어둔 handleDisconnect(탈주/위임/폭파 로직)를 수동으로 강제 가동시킵니다.
     if (typeof (this as any).handleDisconnect === 'function') {
       (this as any).handleDisconnect(client);
+    }
+  }
+
+  // 💡 [버그 6 해결] 기권하기 신호 수신
+  @SubscribeMessage('surrender')
+  handleSurrender(@ConnectedSocket() client: Socket, @MessageBody() data: any) {
+    const room = this.matchingRooms[data.roomCode];
+    if (!room) return;
+    const gameRoom = (this.gameService as any).getRoom ? (this.gameService as any).getRoom(data.roomCode) : null;
+    if (gameRoom) gameRoom.isGameOver = true;
+
+    const winnerNum = (room.p1Id === client.id) ? 2 : 1;
+    this.server.to(data.roomCode).emit('gameOver', { winner: winnerNum, isSuffocated: false, isSurrendered: true });
+  }
+
+  // 💡 [버그 7 해결] 이모티콘 닉네임 포함하여 전송 중계
+  @SubscribeMessage('sendEmoticon')
+  handleSendEmoticon(@ConnectedSocket() client: Socket, @MessageBody() data: any) {
+    this.server.to(data.roomCode).emit('receiveEmoticon', { emoji: data.emoji, nickname: data.nickname });
+  }
+
+  // 💡 [요청 3 추가] 불량 유저 강제 추방 로직
+  @SubscribeMessage('kickUser')
+  handleKickUser(@ConnectedSocket() client: Socket, @MessageBody() data: any) {
+    const room = this.matchingRooms[data.roomCode];
+    if (!room || room.creator.id !== client.id) return; // 방장만 가능
+
+    const guestIndex = room.guests.findIndex((g:any) => g.id === data.targetId);
+    if (guestIndex !== -1) {
+        room.guests.splice(guestIndex, 1);
+        if (room.p1Id === data.targetId) { room.p1Id = null; room.p1Name = null; room.p1Ready = false; }
+        if (room.p2Id === data.targetId) { room.p2Id = null; room.p2Name = null; room.p2Ready = false; }
+        
+        // 대상자에게 강퇴 팝업 명령 전송 및 소켓 그룹에서 강제 이탈
+        this.server.to(data.targetId).emit('kickedOut');
+        this.server.sockets.sockets.get(data.targetId)?.leave(data.roomCode);
+        this.server.to(data.roomCode).emit('roomStateUpdated', { room, isGameRoomOver: true });
+    }
+  }
+
+  // 💡 [요청 3 추가] 특정 유저에게 방장 위임 후 자신은 게스트로 강등
+  @SubscribeMessage('delegateHost')
+  handleDelegateHost(@ConnectedSocket() client: Socket, @MessageBody() data: any) {
+    const room = this.matchingRooms[data.roomCode];
+    if (!room || room.creator.id !== client.id) return;
+
+    const guestIndex = room.guests.findIndex((g:any) => g.id === data.targetId);
+    if (guestIndex !== -1) {
+        const newHost = room.guests[guestIndex];
+        room.guests.splice(guestIndex, 1);
+        room.guests.push({ id: room.creator.id, nickname: room.creator.nickname }); // 기존 방장을 게스트로 이동
+        room.creator = { id: newHost.id, nickname: newHost.nickname }; // 새 방장 등극
+
+        this.server.to(data.roomCode).emit('roomStateUpdated', { room, isGameRoomOver: true });
     }
   }
 }
