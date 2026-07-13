@@ -72,15 +72,26 @@ button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 }
 /* 💡 [버그 3 완벽 해결] 워터마크 숫자가 하얀색 타일 위로 올라오도록 z-index와 투명도 수정 */
 .macro-watermarks { 
-    position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
-    display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); 
+    position: absolute; 
+    top: 4px; 
+    left: 4px; 
+    width: calc(100% - 8px); 
+    height: calc(100% - 8px); 
+    display: grid; 
+    grid-template-columns: repeat(3, 1fr); 
+    grid-template-rows: repeat(3, 1fr); 
     pointer-events: none; 
-    z-index: 10; /* 🛡️ 타일(2)보다 훨씬 높게 설정하여 무조건 보이게 만듭니다. */
+    z-index: 10; 
 }
 .macro-watermarks div { 
-    display: flex; justify-content: center; align-items: center; 
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
     font-size: clamp(60px, 20vw, 120px); 
-    color: rgba(0, 0, 0, 0.08); font-weight: bold; 
+    color: rgba(0, 0, 0, 0.08); 
+    font-weight: bold; 
+    line-height: 1;
+    transform: translateY(-2%); /* 손글씨 폰트 시각적 중심 미세 보정 */
 }
 
 /* 턴 표시, 힌트, 타이머 */
