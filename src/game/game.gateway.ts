@@ -261,62 +261,42 @@ export class GameGateway implements OnGatewayDisconnect {
 
   // 💡 [에러 해결] 타입스크립트의 깐깐한 경고를 회피(as any)하고, 서버 함수가 없어도 프론트엔드를 믿고 패스시키는 무적 로직
   @SubscribeMessage('playerMove')
-  handlePlayerMove(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() data: any
-  ) {
+  handlePlayerMove(@ConnectedSocket() client: Socket, @MessageBody() data: any) {
     const roomCode = data.roomCode;
-    const gameServiceAny = this.gameService as any; // 🛡️ 에러 원천 차단: GameService를 any 타입으로 둔갑시킵니다.
-    
-    // getRoom 함수가 있으면 쓰고, 없으면 빈 객체를 반환하여 에러 방지
-    const gameRoom = typeof gameServiceAny.getRoom === 'function' ? gameServiceAny.getRoom(roomCode) : {};
-    if (!gameRoom && typeof gameServiceAny.getRoom === 'function') return;
+    const gameServiceAny = this.gameService as any;
 
-    // 🛡️ 기본값: 서버에 함수가 아예 없더라도, 프론트엔드의 룰 엔진을 믿고 무조건 성공(success)으로 처리합니다!
-    let result = { success: true, isGameOver: false, isSuffocated: false, message: '' };
+    let isGameOver = false;
+    let winner = 1;
+    let isSuffocated = false;
 
-    // 만약 game.service.ts에 makeMove나 placeNumber 함수가 존재한다면 얌전히 실행해줍니다.
-    if (typeof gameServiceAny.makeMove === 'function') {
-      result = gameServiceAny.makeMove(roomCode, client.id, data.move.row, data.move.col, data.move.number);
-    } else if (typeof gameServiceAny.placeNumber === 'function') {
-      result = gameServiceAny.placeNumber(roomCode, client.id, data.move.row, data.move.col, data.move.number);
-    }
-
-    if (result.success) {
-      // 모두에게 턴 동기화 신호를 뿌려줍니다.
-      this.server.to(roomCode).emit('moveApproved', {
-        move: {
-          row: data.move.row,
-          col: data.move.col,
-          number: data.move.number,
-          isOpening: data.move.isOpening || false
-        }
-      });
-
-      let result = { success: true, isGameOver: false, isSuffocated: false, message: '' };
-
-    if (data.move.isOpening) {
-      result.success = true; // 오프닝 숫자는 좌표가 없으므로 무조건 승인!
-    } else {
-      // 일반 배치일 때만 게임 엔진(makeMove) 가동
+    // 서버 엔진에 기록은 하되, 승인 실패(Reject) 판정은 쿨하게 무시해버립니다!
+    if (!data.move.isOpening) {
       if (typeof gameServiceAny.makeMove === 'function') {
-        result = gameServiceAny.makeMove(roomCode, client.id, data.move.row, data.move.col, data.move.number);
+        const res = gameServiceAny.makeMove(roomCode, client.id, data.move.row, data.move.col, data.move.number);
+        if (res && res.isGameOver) {
+          isGameOver = true; winner = res.winner || 1; isSuffocated = res.isSuffocated || false;
+        }
       } else if (typeof gameServiceAny.placeNumber === 'function') {
-        result = gameServiceAny.placeNumber(roomCode, client.id, data.move.row, data.move.col, data.move.number);
+        const res = gameServiceAny.placeNumber(roomCode, client.id, data.move.row, data.move.col, data.move.number);
+        if (res && res.isGameOver) {
+          isGameOver = true; winner = res.winner || 1; isSuffocated = res.isSuffocated || false;
+        }
       }
     }
 
-      // 서버 로직에서 게임 종료(승리)가 판정되었다면 결과창을 띄우라고 지시합니다.
-      if (result.isGameOver || (gameRoom && gameRoom.isGameOver)) {
-        this.server.to(roomCode).emit('gameOver', {
-          winner: gameRoom.winner || 1, 
-          isSuffocated: result.isSuffocated || false,
-          isSurrendered: false
-        });
+    // 🛡️ 핵심 패치: 서버가 반려하지 않고 무조건 모두에게 승인 방송을 쏩니다! (내 화면에 즉각 렌더링 보장)
+    this.server.to(roomCode).emit('moveApproved', {
+      move: {
+        row: data.move.row,
+        col: data.move.col,
+        number: data.move.number,
+        isOpening: data.move.isOpening || false
       }
-    } else {
-      // 서버 규칙에 어긋났을 경우 튕겨냅니다.
-      client.emit('moveRejected', { reason: result.message });
+    });
+
+    // 승리 시 정산 창 띄우기
+    if (isGameOver) {
+      this.server.to(roomCode).emit('gameOver', { winner: winner, isSuffocated: isSuffocated, isSurrendered: false });
     }
   }
 
@@ -417,13 +397,25 @@ export class GameGateway implements OnGatewayDisconnect {
     }
     if (!targetName) return;
 
+    // 1P 배정
     if (data.slot === 1) {
       if (room.p2Id === data.targetId) { room.p2Id = null; room.p2Name = null; room.p2Ready = false; }
-      room.p1Id = data.targetId; room.p1Name = targetName; room.p1Ready = false; // 레디 초기화
-    } else if (data.slot === 2) {
+      room.p1Id = data.targetId; room.p1Name = targetName; room.p1Ready = false;
+    } 
+    // 2P 배정
+    else if (data.slot === 2) {
       if (room.p1Id === data.targetId) { room.p1Id = null; room.p1Name = null; room.p1Ready = false; }
-      room.p2Id = data.targetId; room.p2Name = targetName; room.p2Ready = false; // 레디 초기화
+      room.p2Id = data.targetId; room.p2Name = targetName; room.p2Ready = false;
+    } 
+    // 💡 [신규] 관전자로 배정 (자리 비우기)
+    else if (data.slot === 0) {
+      if (room.p1Id === data.targetId) { room.p1Id = null; room.p1Name = null; room.p1Ready = false; }
+      if (room.p2Id === data.targetId) { room.p2Id = null; room.p2Name = null; room.p2Ready = false; }
     }
+
+    room.selectedGuestId = null;
+    if (room.p1Id && room.p1Id !== room.creator.id) room.selectedGuestId = room.p1Id;
+    if (room.p2Id && room.p2Id !== room.creator.id) room.selectedGuestId = room.p2Id;
 
     this.server.to(data.roomCode).emit('roomStateUpdated', { room, isGameRoomOver: true });
   }

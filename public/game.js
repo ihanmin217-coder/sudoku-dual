@@ -119,18 +119,28 @@ socket.on('roomStateUpdated', (data) => {
         div.style.padding = '5px 10px'; div.style.background = '#fff'; div.style.border = '1px solid #ddd'; div.style.borderRadius = '4px'; div.style.display = 'flex'; div.style.justifyContent = 'space-between'; div.style.alignItems = 'center'; div.style.fontSize = '22px';
         div.innerText = u.isHost ? `👑 ${u.nickname} (방장)` : `👤 ${u.nickname}`;
         
-        if (isHost && !u.isHost) {
+        // 💡 [버그 1 해결] 이제 '방장 본인'을 포함한 모든 사람의 닉네임 옆에 임명 버튼이 뜹니다!
+        if (isHost) {
             const btnArea = document.createElement('div'); btnArea.style.display = 'flex'; btnArea.style.gap = '5px';
             const b1 = document.createElement('button'); b1.innerText = '1P 임명'; b1.className = 'btn-small';
             b1.onclick = () => socket.emit('assignSlotTarget', { roomCode: currentRoomCode, targetId: u.id, slot: 1 });
             const b2 = document.createElement('button'); b2.innerText = '2P 임명'; b2.className = 'btn-small';
             b2.onclick = () => socket.emit('assignSlotTarget', { roomCode: currentRoomCode, targetId: u.id, slot: 2 });
-            const b3 = document.createElement('button'); b3.innerText = '방장 위임'; b3.className = 'btn-small'; b3.style.background = '#f1c40f';
-            b3.onclick = () => socket.emit('delegateHost', { roomCode: currentRoomCode, targetId: u.id });
-            const b4 = document.createElement('button'); b4.innerText = '추방'; b4.className = 'btn-small'; b4.style.background = '#e74c3c'; b4.style.color = 'white';
-            b4.onclick = () => socket.emit('kickUser', { roomCode: currentRoomCode, targetId: u.id });
+            btnArea.appendChild(b1); btnArea.appendChild(b2);
 
-            btnArea.appendChild(b1); btnArea.appendChild(b2); btnArea.appendChild(b3); btnArea.appendChild(b4);
+            if (!u.isHost) {
+                // 본인이 아닌 게스트라면 위임/추방 버튼 표시
+                const b3 = document.createElement('button'); b3.innerText = '방장 위임'; b3.className = 'btn-small'; b3.style.background = '#f1c40f';
+                b3.onclick = () => socket.emit('delegateHost', { roomCode: currentRoomCode, targetId: u.id });
+                const b4 = document.createElement('button'); b4.innerText = '추방'; b4.className = 'btn-small'; b4.style.background = '#e74c3c'; b4.style.color = 'white';
+                b4.onclick = () => socket.emit('kickUser', { roomCode: currentRoomCode, targetId: u.id });
+                btnArea.appendChild(b3); btnArea.appendChild(b4);
+            } else {
+                // 💡 [관전자 선택 기능] 본인(방장)이라면 자리를 비우고 관전자로 빠지는 버튼 추가!
+                const b5 = document.createElement('button'); b5.innerText = '관전자로 전환'; b5.className = 'btn-small'; b5.style.background = '#95a5a6'; b5.style.color = 'white';
+                b5.onclick = () => socket.emit('assignSlotTarget', { roomCode: currentRoomCode, targetId: u.id, slot: 0 });
+                btnArea.appendChild(b5);
+            }
             div.appendChild(btnArea);
         }
         waitUserList.appendChild(div);
