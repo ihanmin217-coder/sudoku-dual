@@ -41,7 +41,9 @@ export class GameGateway implements OnGatewayDisconnect {
   // 💡 [신규 2] 클라이언트가 처음 로비에 들어왔을 때 방 목록을 요청하는 이벤트
   @SubscribeMessage('requestRoomList')
   handleRequestRoomList(@ConnectedSocket() client: Socket) {
-    this.broadcastRoomList();
+    if (typeof (this as any).broadcastRoomList === 'function') {
+      (this as any).broadcastRoomList();
+    }
   }
 
   private broadcastRoomState(roomCode: string) {
@@ -52,70 +54,43 @@ export class GameGateway implements OnGatewayDisconnect {
 
   // 💡 [서버 교체] 창을 완전히 꺼버리는 탈주 발생 시 즉각 결과창 패배 처리를 강제하는 로직
   handleDisconnect(client: Socket) {
-    console.log(`🔌 유저 접속 종료(창 닫기): ${client.id}`);
+    console.log(`🔌 유저 접속 종료(유령 청소 시작): ${client.id}`);
 
     for (const roomCode in this.matchingRooms) {
-      const room = this.matchingRooms[roomCode] as any;
-      const gameRoom = this.gameService.getRoom(roomCode) as any;
+      const room = this.matchingRooms[roomCode];
+      if (!room) continue;
 
-      // 1. 방장(Creator)이 창을 끄고 나갔을 때
+      // 1. 방장이 나간 경우
       if (room.creator && room.creator.id === client.id) {
-        console.log(`🚨 [방장 창 닫음] 룸코드: ${roomCode}`);
-
-        // 남은 게스트가 있다면 인게임 상태 유무와 관계없이 탈주 정산 패배 처리 전송
         if (room.guests && room.guests.length > 0) {
           const nextHost = room.guests.shift();
           room.creator = { id: nextHost.id, nickname: nextHost.nickname };
-
-          if (room.selectedGuestId === client.id) room.selectedGuestId = null;
-          if (room.selectedGuestId === nextHost.id) room.selectedGuestId = null;
-
-          // 🛡️ 중요: 방장이 게임 도중 창을 끄고 나간 것이므로, 남은 게스트(2P)를 즉시 승리 처리합니다.
-          this.server.to(roomCode).emit('gameOver', {
-            winner: 2, // 2P 승리 강제
-            isSuffocated: false,
-            isSurrendered: true // 기권/탈주 승리 의미
-          });
-
-          if (gameRoom) gameRoom.isGameOver = true;
+          
+          // 방장이 1P/2P 자리에 있었다면 자리표 완벽 회수
+          if (room.p1Id === client.id) { room.p1Id = null; room.p1Name = null; room.p1Ready = false; }
+          if (room.p2Id === client.id) { room.p2Id = null; room.p2Name = null; room.p2Ready = false; }
+          
           this.server.to(roomCode).emit('roomStateUpdated', { room, isGameRoomOver: true });
         } else {
+          // 남은 사람 없으면 방 폭파
           delete this.matchingRooms[roomCode];
-          if (typeof (this.gameService as any).deleteRoom === 'function') {
-            (this.gameService as any).deleteRoom(roomCode);
-          }
+          if (typeof (this.gameService as any).deleteRoom === 'function') (this.gameService as any).deleteRoom(roomCode);
         }
         if (typeof (this as any).broadcastRoomList === 'function') (this as any).broadcastRoomList();
         break;
       }
 
-      // 2. 대결 상대(게스트) 또는 관전자가 창을 끄고 나갔을 때
+      // 2. 게스트(참가자/관전자)가 나간 경우
       const guestIndex = room.guests ? room.guests.findIndex((g: any) => g.id === client.id) : -1;
-      if (guestIndex !== -1 || room.selectedGuestId === client.id) {
+      
+      if (guestIndex !== -1 || room.p1Id === client.id || room.p2Id === client.id) {
         if (guestIndex !== -1) room.guests.splice(guestIndex, 1);
         
-        // 🛡️ 중요:SelectedGuest(2P)가 게임 중 창을 꺼버린 경우 즉시 1P(방장) 우승 처리!
-        if (room.selectedGuestId === client.id) {
-          room.selectedGuestId = null;
+        // 🛡️ 핵심 패치: 나간 게스트의 이름표(p1Id, p2Id)를 확실하게 뽑아버립니다!
+        if (room.p1Id === client.id) { room.p1Id = null; room.p1Name = null; room.p1Ready = false; }
+        if (room.p2Id === client.id) { room.p2Id = null; room.p2Name = null; room.p2Ready = false; }
 
-          if (gameRoom) gameRoom.isGameOver = true;
-          
-          // 방 전체에 즉시 게임 오버 패키지 강제 발송!
-          this.server.to(roomCode).emit('gameOver', {
-            winner: 1, // 1P 승리 강제
-            isSuffocated: false,
-            isSurrendered: true
-          });
-        }
-
-        if (room.guests.length === 0 && room.creator && room.creator.id === client.id) {
-          delete this.matchingRooms[roomCode];
-          if (typeof (this.gameService as any).deleteRoom === 'function') {
-            (this.gameService as any).deleteRoom(roomCode);
-          }
-        } else {
-          if (typeof (this as any).broadcastRoomState === 'function') (this as any).broadcastRoomState(roomCode);
-        }
+        this.server.to(roomCode).emit('roomStateUpdated', { room, isGameRoomOver: true });
         if (typeof (this as any).broadcastRoomList === 'function') (this as any).broadcastRoomList();
         break;
       }
@@ -424,10 +399,7 @@ export class GameGateway implements OnGatewayDisconnect {
   @SubscribeMessage('leaveRoom')
   handleLeaveRoom(@ConnectedSocket() client: Socket, @MessageBody() data: any) {
     client.leave(data.roomCode);
-    // 기존에 완벽하게 만들어둔 handleDisconnect(탈주/위임/폭파 로직)를 수동으로 강제 가동시킵니다.
-    if (typeof (this as any).handleDisconnect === 'function') {
-      (this as any).handleDisconnect(client);
-    }
+    this.handleDisconnect(client);
   }
 
   // 💡 [버그 6 해결] 기권하기 신호 수신

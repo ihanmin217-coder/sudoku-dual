@@ -57,6 +57,8 @@ function playSound(snd) {
 
 // 💡 3. 초대 링크 감지 및 방 입장
 window.onload = () => {
+    socket.emit('requestRoomList'); // 🛡️ 방 목록 요청 신호 발사!
+    
     const urlParams = new URLSearchParams(window.location.search);
     const roomFromUrl = urlParams.get('room');
     if (roomFromUrl) {
@@ -312,7 +314,9 @@ function updateUI() {
         if (isGameStarted && val === 0 && !isGameOver && !isOpeningPhase && currentPlayer === myPlayerNumber) {
             if (requiredNextBox === null || bigBox === requiredNextBox) {
                 cell.classList.add('hoverable');
-                if (requiredNextBox !== null) cell.classList.add('highlight-box');
+                if (requiredNextBox !== null) {
+                    cell.style.backgroundColor = "rgba(174, 214, 241, 0.8)"; // 🛡️ 파란색 제약구역 불빛 강제 적용
+                }
             }
         }
     });
