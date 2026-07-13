@@ -12,7 +12,7 @@ import { GameService } from './game.service';
 @WebSocketGateway({ cors: true })
 export class GameGateway implements OnGatewayDisconnect {
   @WebSocketServer()
-  server: Server;
+  server!: Server;
 
   constructor(private readonly gameService: GameService) {}
 
@@ -22,9 +22,12 @@ export class GameGateway implements OnGatewayDisconnect {
   // 💡 [교체] 게시판 방송 시, '비밀방'은 리스트에서 몰래 빼고 보냅니다.
   private broadcastRoomList() {
     const roomList: any[] = []; 
+    const gameServiceAny = this.gameService as any;
+
     for (const roomCode in this.matchingRooms) {
       const room = this.matchingRooms[roomCode];
-      const gameRoom = this.gameService.getRoom(roomCode);
+      // 서버 엔진에 getRoom이 없더라도 터지지 않도록 예외 처리
+      const gameRoom = typeof gameServiceAny.getRoom === 'function' ? gameServiceAny.getRoom(roomCode) : null;
       
       if (!room.isPrivate && (!gameRoom || gameRoom.isGameOver)) {
         roomList.push({
@@ -34,7 +37,6 @@ export class GameGateway implements OnGatewayDisconnect {
         });
       }
     }
-    // 🛡️ 누락되었던 핵심 통신 코드: 로비에 있는 모든 사람에게 방 목록 방송!
     this.server.emit('roomListUpdated', roomList); 
   }
 

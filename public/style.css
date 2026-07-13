@@ -34,7 +34,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
 /* 스도쿠 보드판 및 셀 레이아웃 */
 .container { width: 100%; max-width: 460px; background-color: #fcf8eb; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); padding: 20px; border: 4px solid #333; }
-.board-wrapper { position: relative; width: 100%; aspect-ratio: 1/1; background-color: #222; padding: 4px; border-radius: 8px; margin-bottom: 15px; }
+.board-wrapper { 
+    position: relative; width: 100%; aspect-ratio: 1/1; background-color: #222; 
+    padding: 4px; border-radius: 8px; margin-bottom: 15px; overflow: hidden; 
+}
 .board { display: grid; grid-template-columns: repeat(9, 1fr); grid-template-rows: repeat(9, 1fr); width: 100%; height: 100%; gap: 1px; position: relative; z-index: 2; }
 .cell { 
     background-color: transparent; 
@@ -76,7 +79,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 }
 .macro-watermarks div { 
     display: flex; justify-content: center; align-items: center; 
-    font-size: 150px; color: rgba(0, 0, 0, 0.08); font-weight: bold; 
+    font-size: clamp(60px, 20vw, 120px); 
+    color: rgba(0, 0, 0, 0.08); font-weight: bold; 
 }
 
 /* 턴 표시, 힌트, 타이머 */

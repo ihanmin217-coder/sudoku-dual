@@ -67,6 +67,25 @@ window.onload = () => {
     }
 };
 
+socket.on('roomListUpdated', (roomList) => {
+    const container = document.getElementById('roomListContainer');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    if (!roomList || roomList.length === 0) {
+        container.innerHTML = '<div style="color: #888; text-align: center; font-size: 22px; padding: 10px;">개설된 공개방이 없습니다.</div>';
+        return;
+    }
+    roomList.forEach(r => {
+        const div = document.createElement('div');
+        div.style.padding = '10px'; div.style.borderBottom = '1px solid #ccc';
+        div.style.display = 'flex'; div.style.justifyContent = 'space-between'; div.style.alignItems = 'center';
+        div.innerHTML = `<span style="font-size: 22px;">👑 ${r.hostName} 님의 방 (${r.playerCount}명)</span>
+                         <button class="btn-small" style="background:#3498db; color:white;" onclick="document.getElementById('joinCodeInput').value='${r.roomCode}'; joinRoomByCode();">입장</button>`;
+        container.appendChild(div);
+    });
+});
+
 function createNewRoom(isPrivate) {
     const nick = document.getElementById('nicknameInput').value.trim() || '익명';
     socket.emit('createRoom', { nickname: nick, isPrivate: isPrivate });
@@ -238,6 +257,8 @@ function initBoard() {
                 if (requiredNextBox !== null && bigBox !== requiredNextBox) return;
 
                 if (isFirstTurn && isOpeningPhase === false) {
+                    // 🛡️ 첫 배치 시 스도쿠 룰 강력 검사!
+                    if (!isValidSudokuMove(row, col, openingNumber)) return alert("스도쿠 규칙 위반입니다! (가로, 세로, 3x3 박스 내에 이미 같은 숫자가 있습니다)");
                     socket.emit('playerMove', { roomCode: currentRoomCode, move: { row: row, col: col, number: openingNumber, bigBox: bigBox, isOpening: false } });
                 } else {
                     openNumpadModal(false, row, col); 
@@ -350,8 +371,13 @@ function openNumpadModal(isOpening, r=-1, c=-1) {
 function closeNumpadModal() { document.getElementById('numpadModal').style.display = 'none'; }
 function selectNumber(num) {
     closeNumpadModal();
-    if (isOpeningSelection) socket.emit('playerMove', { roomCode: currentRoomCode, move: { number: num, isOpening: true } });
-    else socket.emit('playerMove', { roomCode: currentRoomCode, move: { row: selectedRow, col: selectedCol, number: num, isOpening: false } });
+    if (isOpeningSelection) {
+        socket.emit('playerMove', { roomCode: currentRoomCode, move: { number: num, isOpening: true } });
+    } else {
+        // 🛡️ 숫자패드에서 고른 숫자 스도쿠 룰 강력 검사!
+        if (!isValidSudokuMove(selectedRow, selectedCol, num)) return alert("스도쿠 규칙 위반입니다! (가로, 세로, 3x3 박스 내에 이미 같은 숫자가 있습니다)");
+        socket.emit('playerMove', { roomCode: currentRoomCode, move: { row: selectedRow, col: selectedCol, number: num, isOpening: false } });
+    }
 }
 function openConfigModal() { if(isHost) { document.getElementById('modalTurnLimit').value = serverConfigTurnLimit; document.getElementById('modalTurnPref').value = serverConfigTurnPref; document.getElementById('configModal').style.display = 'flex'; } }
 function closeConfigModal() { document.getElementById('configModal').style.display = 'none'; }
@@ -484,3 +510,20 @@ socket.on('receiveEmoticon', (data) => {
     document.body.appendChild(floating); setTimeout(() => { floating.remove(); }, 2000);
 });
 const style = document.createElement('style'); style.innerHTML = `@keyframes floatUp { 0% { opacity: 1; bottom: 100px; } 100% { opacity: 0; bottom: 200px; } }`; document.head.appendChild(style);
+
+function isValidSudokuMove(row, col, num) {
+    // 1. 가로, 세로 검사
+    for (let i = 0; i < 9; i++) {
+        if (board[row][i] === num) return false;
+        if (board[i][col] === num) return false;
+    }
+    // 2. 3x3 큰 칸 검사
+    const startRow = Math.floor(row / 3) * 3;
+    const startCol = Math.floor(col / 3) * 3;
+    for (let i = startRow; i < startRow + 3; i++) {
+        for (let j = startCol; j < startCol + 3; j++) {
+            if (board[i][j] === num) return false;
+        }
+    }
+    return true;
+}
