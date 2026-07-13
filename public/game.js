@@ -14,6 +14,11 @@ let currentPlayer = 1;
 let requiredNextBox = null;
 let openingNumber = null;
 
+let scores = { 1: 0, 2: 0 };
+let boxOwners = Array(10).fill(0); // 1번~9번 큰 구역의 주인 (0: 없음, 1: 1P, 2: 2P)
+let rowOwners = Array(9).fill(0); // 0~8 가로줄
+let colOwners = Array(9).fill(0); // 0~8 세로줄
+
 let board = Array.from({length: 9}, () => Array(9).fill(0));
 let gameHistory = [];
 let lastMove = null;
@@ -216,6 +221,11 @@ function backToMainLobby() { forceHostMigrationBeforeLeave(); document.getElemen
 // 💡 5. 인게임 진입 및 보드판 실시간 복구 렌더링
 socket.on('gameStart', (data) => {
     isGameStarted = true; isGameOver = false; gameHistory = []; lastMove = null;
+    scores = { 1: 0, 2: 0 };
+    boxOwners = Array(10).fill(0);
+    rowOwners = Array(9).fill(0);
+    colOwners = Array(9).fill(0);
+    
     document.getElementById('waitingRoomScreen').style.display = 'none';
     document.getElementById('gameContainer').style.display = 'block';
     document.getElementById('gameOverScreen').style.display = 'none';
@@ -232,8 +242,6 @@ socket.on('gameStart', (data) => {
         sndBgm.volume = bgmVol; sndBgm.currentTime = 0;
         sndBgm.play().catch(()=>{ document.body.addEventListener('click', () => { if(bgmVol>0) sndBgm.play().catch(()=>{}); }, { once: true }); });
     }
-    
-    // 🛡️ [2번 완벽 해결] 파편화되었던 보드판 레이아웃을 81개의 격자로 실시간 조립 후 강제 사출!
     initBoard();
     updateUI();
 });
@@ -275,41 +283,100 @@ function getBoxFromRowCol(r, c) { return Math.floor(r / 3) * 3 + Math.floor(c / 
 // 💡 6. [3번 완벽 해결] 코어 룰 엔진 및 정밀 턴 핑퐁 시스템
 socket.on('moveApproved', (data) => {
     if (!data || !data.move) return;
-    const isOpeningSignal = (data.move.isOpening === true || isOpeningPhase === true && gameHistory.length === 0);
+    const isOpeningSignal = (data.move.isOpening === true || (isOpeningPhase === true && gameHistory.length === 0));
 
     if (isOpeningSignal) {
         if (data.move.number) openingNumber = data.move.number;
-        isOpeningPhase = false; isFirstTurn = true; currentPlayer = 1; // 선공에게 첫 수 고정 권한 배정
+        isOpeningPhase = false; isFirstTurn = true; currentPlayer = 1;
     } else {
         if (data.move.number === undefined) data.move.number = openingNumber;
         
-        // 🛡️ 프리턴 꼬임 전면 수술: 현재 보드를 둔 유저의 정확한 명의(currentPlayer)를 기보에 확정 각인!
-        gameHistory.push({ row: data.move.row, col: data.move.col, number: data.move.number, player: currentPlayer });
-        board[data.move.row][data.move.col] = data.move.number;
-        lastMove = { row: data.move.row, col: data.move.col };
+        const placedRow = data.move.row;
+        const placedCol = data.move.col;
+        const placedNum = data.move.number;
+        const mover = currentPlayer; // 방금 수를 둔 플레이어
+
+        gameHistory.push({ row: placedRow, col: placedCol, number: placedNum, player: mover });
+        board[placedRow][placedCol] = placedNum;
+        lastMove = { row: placedRow, col: placedCol };
         if (myPlayerNumber === 0 && !isSpectatorReviewMode) spectatorCurrentStep = gameHistory.length;
 
-        // 🛡️ 순서 교대 엇박자 전면 격파
-        if (isFirstTurn) { 
-            currentPlayer = 2; isFirstTurn = false; // 선공 첫 수 완료 -> 후공(2P)의 턴으로 전환
-        } else { 
-            currentPlayer = currentPlayer === 1 ? 2 : 1; // 1P <-> 2P 무한 핑퐁 교대 보장
+        // 🛡️ 1. 방금 숫자를 둔 위치를 기준으로 3x3 구역, 가로줄, 세로줄 완성 여부 동시 스캔!
+        const targetBox = getBoxFromRowCol(placedRow, placedCol);
+        let pointsGained = 0;
+
+        // ① 3x3 구역 검사
+        if (boxOwners[targetBox] === 0 && isBoxCompletelyFilled(targetBox)) {
+            boxOwners[targetBox] = mover;
+            pointsGained += 1;
         }
+        // ② 가로줄 검사
+        if (rowOwners[placedRow] === 0 && isRowCompletelyFilled(placedRow)) {
+            rowOwners[placedRow] = mover;
+            pointsGained += 1;
+        }
+        // ③ 세로줄 검사
+        if (colOwners[placedCol] === 0 && isColCompletelyFilled(placedCol)) {
+            colOwners[placedCol] = mover;
+            pointsGained += 1;
+        }
+
+        // 🛡️ 1. 방금 숫자를 둔 위치를 기준으로 3x3 구역, 가로줄, 세로줄 완성 여부 동시 스캔!
+        const targetBox = getBoxFromRowCol(placedRow, placedCol);
+        let pointsGained = 0;
+
+        // ① 3x3 구역 검사
+        if (boxOwners[targetBox] === 0 && isBoxCompletelyFilled(targetBox)) {
+            boxOwners[targetBox] = mover;
+            pointsGained += 1;
+        }
+        // ② 가로줄 검사
+        if (rowOwners[placedRow] === 0 && isRowCompletelyFilled(placedRow)) {
+            rowOwners[placedRow] = mover;
+            pointsGained += 1;
+        }
+        // ③ 세로줄 검사
+        if (colOwners[placedCol] === 0 && isColCompletelyFilled(placedCol)) {
+            colOwners[placedCol] = mover;
+            pointsGained += 1;
+        }
+
+        // 점수를 하나라도 얻었다면?
+        if (pointsGained > 0) {
+            scores[mover] += pointsGained;
+            playSound(sndBell); // 띠링! 점수 획득 알림음
+
+            // 🛡️ [승리 조건 1] 2점 이상 따내면 즉시 우승! (한 방에 2점 이상 콤보 획득도 포함)
+            if (scores[mover] >= 2) {
+                updateUI();
+                if (mover === myPlayerNumber) {
+                    socket.emit('claimVictory', { roomCode: currentRoomCode, winner: mover, reason: 'SCORE_LIMIT' });
+                }
+                return;
+            }
+        }
+
+        // 턴 교대
+        if (isFirstTurn) { currentPlayer = 2; isFirstTurn = false; } 
+        else { currentPlayer = currentPlayer === 1 ? 2 : 1; }
         
-        // 다음 사람의 강제 칸 자체 계산
-        const nextBox = data.move.number;
-        let isFull = true;
-        const sr = Math.floor((nextBox - 1) / 3) * 3; const sc = ((nextBox - 1) % 3) * 3;
-        for (let r = sr; r < sr + 3; r++) {
-            for (let c = sc; c < sc + 3; c++) { if (board[r][c] === 0) { isFull = false; break; } }
+        // 다음 사람이 가야 할 강제 구역 계산
+        const nextBox = placedNum;
+        requiredNextBox = isBoxCompletelyFilled(nextBox) ? null : nextBox;
+
+        // 🛡️ 2. [승리 조건 2] 강제된 구역(requiredNextBox)에 빈칸이 있어도 둘 수 있는 숫자가 없으면 '질식 승리'!
+        if (requiredNextBox !== null && isPlayerSuffocated(requiredNextBox)) {
+            updateUI();
+            if (mover === myPlayerNumber) {
+                // 상대를 질식시킨 플레이어가 서버에 승리를 선언!
+                socket.emit('claimVictory', { roomCode: currentRoomCode, winner: mover, reason: 'SUFFOCATION' });
+            }
+            return;
         }
-        requiredNextBox = isFull ? null : nextBox;
     }
 
     updateUI();
     if (data.move.number) playSound(sndPencil);
-    
-    // 🛡️ [4번 완벽 해결] 수가 제대로 성립되어 내려왔으므로 60초 타이머를 강제로 리셋 후 리스타트!
     startTimer(); 
 });
 
@@ -324,22 +391,20 @@ function updateUI() {
         cell.innerText = val !== 0 ? val : '';
         cell.classList.remove('hoverable', 'highlight-box', 'last-move');
         
-        // 🛡️ 핵심 수정: 칸 배경색을 무조건 하얀색으로 깔아줍니다!
-        cell.style.backgroundColor = "#fff"; 
-        cell.style.color = "#222"; 
+        // 🛡️ 점령된 구역은 소유자의 색상으로 연하게 물듭니다! (1P: 연한 붉은색, 2P: 연한 파란색)
+        let cellOwner = 0;
+        const isOwnedByP1 = (boxOwners[bigBox] === 1 || rowOwners[r] === 1 || colOwners[c] === 1);
+        const isOwnedByP2 = (boxOwners[bigBox] === 2 || rowOwners[r] === 2 || colOwners[c] === 2);
+        
+        // 만약 1P의 점령선과 2P의 점령선이 교차하는 칸이라면 연한 보라색으로 표시
+        if (isOwnedByP1 && isOwnedByP2) cellOwner = 3; 
+        else if (isOwnedByP1) cellOwner = 1;
+        else if (isOwnedByP2) cellOwner = 2;
 
-        const moveInfo = gameHistory.find(h => h.row === r && h.col === c);
-        if (moveInfo) { cell.style.color = moveInfo.player === 1 ? "#d32f2f" : "#1976d2"; cell.style.fontWeight = "bold"; }
-        if (lastMove && lastMove.row === r && lastMove.col === c) cell.classList.add('last-move');
-
-        if (isGameStarted && val === 0 && !isGameOver && !isOpeningPhase && currentPlayer === myPlayerNumber) {
-            if (requiredNextBox === null || bigBox === requiredNextBox) {
-                cell.classList.add('hoverable');
-                if (requiredNextBox !== null) {
-                    cell.style.backgroundColor = "rgba(174, 214, 241, 0.8)"; // 🛡️ 파란색 제약구역 불빛 강제 적용
-                }
-            }
-        }
+        if (cellOwner === 1) cell.style.backgroundColor = "#ffebee"; // 1P 연한 붉은색
+        else if (cellOwner === 2) cell.style.backgroundColor = "#e3f2fd"; // 2P 연한 파란색
+        else if (cellOwner === 3) cell.style.backgroundColor = "#f3e5f5"; // 교차 영역 보라색
+        else cell.style.backgroundColor = "#fff";
     });
 
     if (!isGameStarted) return;
@@ -353,6 +418,14 @@ function updateUI() {
     
     const inGameChat = document.getElementById('inGameChatContainer');
     if (inGameChat) inGameChat.style.display = (myPlayerNumber !== 0 && !isGameOver) ? 'none' : 'flex';
+
+    // 🛡️ [점수 표시 패치] 상단 선공/후공 이름표 옆에 실시간 획득 점수([X점])를 또렷하게 표기합니다!
+    const hostCrown = (myId === playerNames[1]) ? ' 👑' : '';
+    const guestCrown = (myId === playerNames[2]) ? ' 👑' : '';
+    const p1Info = document.getElementById('p1Info');
+    const p2Info = document.getElementById('p2Info');
+    if(p1Info) p1Info.innerText = `선공: ${playerNames[1]} [${scores[1]}점]${hostCrown}`;
+    if(p2Info) p2Info.innerText = `후공: ${playerNames[2]} [${scores[2]}점]${guestCrown}`;
 
     const hintEl = document.getElementById('hintText');
     if (isOpeningPhase) hintEl.innerText = myPlayerNumber === 2 ? "⏳ [오프닝] 선공이 쓸 첫 숫자를 골라주세요." : "⏳ 상대방이 첫 숫자를 정하고 있습니다.";
@@ -526,4 +599,47 @@ function isValidSudokuMove(row, col, num) {
         }
     }
     return true;
+}
+
+// 💡 특정 3x3 구역이 9칸 모두 채워졌는지 확인하는 함수
+function isBoxCompletelyFilled(boxNum) {
+    const sr = Math.floor((boxNum - 1) / 3) * 3;
+    const sc = ((boxNum - 1) % 3) * 3;
+    for (let r = sr; r < sr + 3; r++) {
+        for (let c = sc; c < sc + 3; c++) {
+            if (board[r][c] === 0) return false;
+        }
+    }
+    return true;
+}
+
+// 💡 [기존 3x3 검사 함수 아래에 가로/세로 검사기 추가]
+function isRowCompletelyFilled(r) {
+    for (let c = 0; c < 9; c++) { if (board[r][c] === 0) return false; }
+    return true;
+}
+function isColCompletelyFilled(c) {
+    for (let r = 0; r < 9; r++) { if (board[r][c] === 0) return false; }
+    return true;
+}
+
+// 💡 [질식 검사기] 특정 3x3 구역 내의 모든 빈칸에 1~9 중 넣을 수 있는 숫자가 단 하나도 없는지 검사!
+function isPlayerSuffocated(boxNum) {
+    const sr = Math.floor((boxNum - 1) / 3) * 3;
+    const sc = ((boxNum - 1) % 3) * 3;
+    let hasEmptyCell = false;
+
+    for (let r = sr; r < sr + 3; r++) {
+        for (let c = sc; c < sc + 3; c++) {
+            if (board[r][c] === 0) {
+                hasEmptyCell = true;
+                // 1부터 9까지 하나라도 합법적으로 넣을 수 있다면 질식이 아님!
+                for (let num = 1; num <= 9; num++) {
+                    if (isValidSudokuMove(r, c, num)) return false; 
+                }
+            }
+        }
+    }
+    // 빈칸은 분명 존재하는데 넣을 수 있는 숫자가 아예 없다면 진정한 질식(Suffocation)!
+    return hasEmptyCell;
 }

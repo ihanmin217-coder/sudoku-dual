@@ -457,4 +457,25 @@ export class GameGateway implements OnGatewayDisconnect {
         this.server.to(data.roomCode).emit('roomStateUpdated', { room, isGameRoomOver: true });
     }
   }
+
+  // 💡 [신규] 클라이언트가 2점 선취 또는 질식 승리를 판정하여 보고했을 때 즉각 게임을 끝내는 로직
+  @SubscribeMessage('claimVictory')
+  handleClaimVictory(@ConnectedSocket() client: Socket, @MessageBody() data: { roomCode: string; winner: number; reason: string }) {
+    const room = this.matchingRooms[data.roomCode];
+    if (!room) return;
+
+    const gameRoom = (this.gameService as any).getRoom ? (this.gameService as any).getRoom(data.roomCode) : null;
+    if (gameRoom) gameRoom.isGameOver = true;
+
+    const isSuffocated = (data.reason === 'SUFFOCATION');
+    
+    console.log(`🏆 [승리 선언 수신] 방: ${data.roomCode}, 우승자: ${data.winner}P, 사유: ${data.reason}`);
+
+    // 방 안에 있는 모든 유저(플레이어 + 관전자)에게 게임 종료 및 승리 사유 방송!
+    this.server.to(data.roomCode).emit('gameOver', {
+      winner: data.winner,
+      isSuffocated: isSuffocated,
+      isSurrendered: false
+    });
+  }
 }
