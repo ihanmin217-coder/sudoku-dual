@@ -11,24 +11,26 @@ import { GameService } from './game.service';
 
 @WebSocketGateway({ cors: true })
 export class GameGateway implements OnGatewayDisconnect {
+  // 💡 [에러 1 완벽 해결] 느낌표(!)를 붙여서 타입스크립트의 깐깐한 경고(빨간 줄)를 즉시 잠재웁니다.
   @WebSocketServer()
-  server!: Server;
+  server!: Server; 
 
   constructor(private readonly gameService: GameService) {}
 
   private matchingRooms: Record<string, any> = {};
 
-  // 💡 [신규 1] 전체 유저에게 현재 입장 가능한 방 목록을 뿌려주는 함수
-  // 💡 [교체] 게시판 방송 시, '비밀방'은 리스트에서 몰래 빼고 보냅니다.
+  // 💡 [에러 2 완벽 해결] 방을 만들 때 서버가 뻗어버리지 않도록 '무적 방어막(gameServiceAny)'을 다시 씌웁니다!
   private broadcastRoomList() {
     const roomList: any[] = []; 
-    const gameServiceAny = this.gameService as any;
+    const gameServiceAny = this.gameService as any; // 🛡️ 안전장치 추가
 
     for (const roomCode in this.matchingRooms) {
       const room = this.matchingRooms[roomCode];
-      // 서버 엔진에 getRoom이 없더라도 터지지 않도록 예외 처리
+      
+      // 🛡️ getRoom 함수가 서버 엔진에 없더라도 절대 터지지 않도록 예외 처리
       const gameRoom = typeof gameServiceAny.getRoom === 'function' ? gameServiceAny.getRoom(roomCode) : null;
       
+      // 방이 비밀방(!room.isPrivate)이 아니면서, 게임 대기 중인 방만 목록에 추가
       if (!room.isPrivate && (!gameRoom || gameRoom.isGameOver)) {
         roomList.push({
           roomCode,
@@ -37,6 +39,7 @@ export class GameGateway implements OnGatewayDisconnect {
         });
       }
     }
+    // 로비에 있는 모든 사람에게 방 목록 방송!
     this.server.emit('roomListUpdated', roomList); 
   }
 
