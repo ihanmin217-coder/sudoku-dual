@@ -446,13 +446,19 @@ function startTimer() {
         if (timeLeft <= 0) { 
             clearInterval(timerInterval); 
             document.body.classList.remove('warning-glow');
-            if (currentPlayer === myPlayerNumber) surrender(); 
+            if (currentPlayer === myPlayerNumber) surrender(true); 
         }
     }, 1000);
 }
-function surrender() { 
-    if (confirm("정말로 기권하시겠습니까? 기권 시 즉시 패배로 기록됩니다.")) {
-        socket.emit('surrender', { roomCode: currentRoomCode }); 
+function surrender(isAutomatic = false) { 
+    if (isAutomatic) {
+        // 시간이 다 끝났을 때는 확인 창 없이 즉시 서버에 기권(패배) 전송!
+        socket.emit('surrender', { roomCode: currentRoomCode });
+    } else {
+        // 버튼을 직접 눌렀을 때만 실수 방지 팝업 띄우기
+        if (confirm("정말로 기권하시겠습니까? 기권 시 즉시 패배로 기록됩니다.")) {
+            socket.emit('surrender', { roomCode: currentRoomCode }); 
+        }
     }
 }
 
