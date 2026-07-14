@@ -65,14 +65,25 @@ export class GameGateway implements OnGatewayDisconnect {
       const room = this.matchingRooms[roomCode];
       if (!room) continue;
 
-      // 🛡️ 핵심 로직: 게임 중에 1P나 2P가 튕기거나 창을 닫았다면?
+      // 💡 [폴리싱] 게임 중 플레이어 탈주 시 즉각 강제 종료 및 패배 처리 판정!
       if (room.isGameStarted) {
         if (room.p1Id === client.id || room.p2Id === client.id) {
-          room.isGameStarted = false; // 중복 발송 방지
-          const winnerNum = (room.p1Id === client.id) ? 2 : 1; 
+          room.isGameStarted = false;
+          const winnerNum = (room.p1Id === client.id) ? 2 : 1;
           console.log(`🚨 [강제 종료 감지] 방 ${roomCode}에서 플레이어 탈주! ${winnerNum}P 기권 승리 처리`);
           
-          this.server.to(roomCode).emit('gameOver', { winner: winnerNum, isSuffocated: false, isSurrendered: true });
+          // 💡 [DB 전적 기록] 상대방이 강제 종료로 도망쳤을 때도 승리/패배 DB에 정확히 기록!
+          const winnerNick = (winnerNum === 1) ? room.p1Name : room.p2Name;
+          const loserNick = (winnerNum === 1) ? room.p2Name : room.p1Name;
+          if (typeof (this.gameService as any).recordBattleResult === 'function') {
+            (this.gameService as any).recordBattleResult(winnerNick, loserNick);
+          }
+
+          this.server.to(roomCode).emit('gameOver', {
+            winner: winnerNum,
+            isSuffocated: false,
+            isSurrendered: true
+          });
         }
       }
 
@@ -417,12 +428,23 @@ export class GameGateway implements OnGatewayDisconnect {
   handleSurrender(@ConnectedSocket() client: Socket, @MessageBody() data: any) {
     const room = this.matchingRooms[data.roomCode];
     if (!room) return;
-    room.isGameStarted = false; // 💡 정상 기권했으므로 탈주 체크 무효화
-    const gameRoom = (this.gameService as any).getRoom ? (this.gameService as any).getRoom(data.roomCode) : null;
-    if (gameRoom) gameRoom.isGameOver = true;
+    
+    room.isGameStarted = false; // 💡 기권 시 탈주 엔진 무효화
 
     const winnerNum = (room.p1Id === client.id) ? 2 : 1;
-    this.server.to(data.roomCode).emit('gameOver', { winner: winnerNum, isSuffocated: false, isSurrendered: true });
+
+    // 💡 [DB 전적 기록] 기권/타임오버 시 승자와 패자 닉네임을 찾아 DB에 저장!
+    const winnerNick = (winnerNum === 1) ? room.p1Name : room.p2Name;
+    const loserNick = (winnerNum === 1) ? room.p2Name : room.p1Name;
+    if (typeof (this.gameService as any).recordBattleResult === 'function') {
+      (this.gameService as any).recordBattleResult(winnerNick, loserNick);
+    }
+
+    this.server.to(data.roomCode).emit('gameOver', {
+      winner: winnerNum,
+      isSuffocated: false,
+      isSurrendered: true
+    });
   }
 
   // 💡 [버그 7 해결] 이모티콘 닉네임 포함하여 전송 중계
@@ -472,16 +494,22 @@ export class GameGateway implements OnGatewayDisconnect {
   handleClaimVictory(@ConnectedSocket() client: Socket, @MessageBody() data: { roomCode: string; winner: number; reason: string }) {
     const room = this.matchingRooms[data.roomCode];
     if (!room) return;
-    room.isGameStarted = false; // 💡 정상 승리했으므로 탈주 체크 무효화
+    
+    room.isGameStarted = false; // 💡 정상 승리 시 탈주 엔진 무효화
 
     const gameRoom = (this.gameService as any).getRoom ? (this.gameService as any).getRoom(data.roomCode) : null;
     if (gameRoom) gameRoom.isGameOver = true;
 
     const isSuffocated = (data.reason === 'SUFFOCATION');
-    
     console.log(`🏆 [승리 선언 수신] 방: ${data.roomCode}, 우승자: ${data.winner}P, 사유: ${data.reason}`);
 
-    // 방 안에 있는 모든 유저(플레이어 + 관전자)에게 게임 종료 및 승리 사유 방송!
+    // 💡 [DB 전적 기록] 2점 달성 또는 질식 승리 시 DB에 저장!
+    const winnerNick = (data.winner === 1) ? room.p1Name : room.p2Name;
+    const loserNick = (data.winner === 1) ? room.p2Name : room.p1Name;
+    if (typeof (this.gameService as any).recordBattleResult === 'function') {
+      (this.gameService as any).recordBattleResult(winnerNick, loserNick);
+    }
+
     this.server.to(data.roomCode).emit('gameOver', {
       winner: data.winner,
       isSuffocated: isSuffocated,

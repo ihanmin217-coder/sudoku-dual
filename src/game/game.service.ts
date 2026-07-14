@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 export interface GameRoom {
   roomCode: string;
@@ -20,6 +21,11 @@ export interface GameRoom {
 @Injectable()
 export class GameService {
   private rooms: Record<string, GameRoom> = {};
+
+  private supabase: SupabaseClient = createClient(
+    'https://oucofgbdsjhdlycqmdco.supabase.co/rest/v1/', 
+    'sb_publishable_ZE_InKE264pFgSNJ4-yOKA_YAh4tm6I'
+  );
 
   createGameState(roomCode: string) {
     this.rooms[roomCode] = {
@@ -144,5 +150,35 @@ export class GameService {
     if (!hasEmptyCell) return "FULL";
     if (!anyValidMove) return "SUFFOCATED";
     return "NORMAL";
+  }
+
+  // 💡 [신규 추가] 게임 종료 시 승자와 패자의 전적을 DB에 기록/업데이트하는 마법의 함수!
+  async recordBattleResult(winnerNick: string, loserNick: string) {
+    if (!winnerNick || !loserNick || winnerNick === '익명' || loserNick === '익명') {
+      console.log('⚠️ 익명 유저는 전적이 기록되지 않습니다.');
+      return;
+    }
+
+    try {
+      // 1. 승리자 기록 (없으면 새로 만들고 wins + 1, 점수 + 20)
+      const { data: winUser } = await this.supabase.from('users').select('*').eq('nickname', winnerNick).single();
+      if (winUser) {
+        await this.supabase.from('users').update({ wins: winUser.wins + 1, points: winUser.points + 20 }).eq('nickname', winnerNick);
+      } else {
+        await this.supabase.from('users').insert([{ id: crypto.randomUUID(), nickname: winnerNick, wins: 1, losses: 0, points: 1020 }]);
+      }
+
+      // 2. 패배자 기록 (없으면 새로 만들고 losses + 1, 점수 - 10)
+      const { data: loseUser } = await this.supabase.from('users').select('*').eq('nickname', loserNick).single();
+      if (loseUser) {
+        await this.supabase.from('users').update({ losses: loseUser.losses + 1, points: Math.max(0, loseUser.points - 10) }).eq('nickname', loserNick);
+      } else {
+        await this.supabase.from('users').insert([{ id: crypto.randomUUID(), nickname: loserNick, wins: 0, losses: 1, points: 990 }]);
+      }
+
+      console.log(`📊 [DB 전적 기록 완료] 승리: ${winnerNick} (+20점) / 패배: ${loserNick} (-10점)`);
+    } catch (error) {
+      console.error('❌ DB 전적 저장 중 오류 발생:', error);
+    }
   }
 }
