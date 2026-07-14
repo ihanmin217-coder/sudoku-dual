@@ -514,3 +514,11 @@ socket.on('receiveEmoticon', (data) => {
     document.body.appendChild(floating); setTimeout(() => { floating.remove(); }, 2000);
 });
 const style = document.createElement('style'); style.innerHTML = `@keyframes floatUp { 0% { opacity: 1; bottom: 100px; } 100% { opacity: 0; bottom: 200px; } }`; document.head.appendChild(style);
+function returnToLiveSpectate() {
+    isSpectatorReviewMode = false;
+    const specReplay = document.getElementById('specReplayStatus');
+    if (specReplay) specReplay.innerText = "🔴 라이브 관전 중";
+    
+    playSound(sndBell);
+    updateUI(); // 현재 실시간 보드판 상태로 즉시 새로고침!
+}

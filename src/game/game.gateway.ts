@@ -65,6 +65,23 @@ export class GameGateway implements OnGatewayDisconnect {
       const room = this.matchingRooms[roomCode];
       if (!room) continue;
 
+      // 🛡️ [핵심 신규 추가] 현재 게임이 진행 중인데 1P나 2P가 강제 종료(탈주)한 경우 즉시 게임 끝!
+      const gameRoom = (this.gameService as any).getRoom ? (this.gameService as any).getRoom(roomCode) : null;
+      if (gameRoom && !gameRoom.isGameOver) {
+        if (room.p1Id === client.id || room.p2Id === client.id) {
+          gameRoom.isGameOver = true;
+          const winnerNum = (room.p1Id === client.id) ? 2 : 1; // 나간 사람의 반대편이 승리
+          console.log(`🚨 [강제 종료 감지] 방 ${roomCode}에서 플레이어 탈주! ${winnerNum}P 기권 승리 처리`);
+          
+          // 방에 남아있는 상대방과 관전자들에게 즉시 승리 팝업 전송!
+          this.server.to(roomCode).emit('gameOver', {
+            winner: winnerNum,
+            isSuffocated: false,
+            isSurrendered: true // 탈주도 기권 패배로 취급하여 팝업 출력
+          });
+        }
+      }
+
       // 1. 방장이 나간 경우
       if (room.creator && room.creator.id === client.id) {
         if (room.guests && room.guests.length > 0) {
