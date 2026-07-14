@@ -112,7 +112,13 @@ socket.on('roomJoined', (data) => {
 
 window.addEventListener('beforeunload', () => { if (currentRoomCode) socket.emit('leaveRoom', { roomCode: currentRoomCode }); });
 function forceHostMigrationBeforeLeave() { if (currentRoomCode) socket.emit('leaveRoom', { roomCode: currentRoomCode }); }
-function backToWaitingRoom() { forceHostMigrationBeforeLeave(); document.getElementById('gameOverScreen').style.display = 'none'; document.getElementById('gameContainer').style.display = 'none'; document.getElementById('waitingRoomScreen').style.display = 'block'; isGameOver = true; isGameStarted = false; }
+function backToWaitingRoom() { 
+    document.getElementById('gameOverScreen').style.display = 'none'; 
+    document.getElementById('gameContainer').style.display = 'none'; 
+    document.getElementById('waitingRoomScreen').style.display = 'block'; 
+    isGameOver = true; 
+    isGameStarted = false; 
+}
 function backToMainLobby() { forceHostMigrationBeforeLeave(); document.getElementById('gameOverScreen').style.display = 'none'; document.getElementById('gameContainer').style.display = 'none'; document.getElementById('waitingRoomScreen').style.display = 'none'; document.getElementById('lobbyScreen').style.display = 'block'; currentRoomCode = ''; isGameOver = true; isGameStarted = false; window.history.replaceState({}, '', window.location.pathname); }
 
 // 💡 4. 대기실 업데이트
