@@ -23,8 +23,8 @@ export class GameService {
   private rooms: Record<string, GameRoom> = {};
 
   private supabase: SupabaseClient = createClient(
-    'https://oucofgbdsjhdlycqmdco.supabase.co/rest/v1/', 
-    'sb_publishable_ZE_InKE264pFgSNJ4-yOKA_YAh4tm6I'
+    'https://zbucvqsonuefsbmkfvrc.supabase.co/rest/v1/', 
+    'sb_publishable_k_K27JqDyZs6x3NqcznNiw_CqJQhoU0'
   );
 
   createGameState(roomCode: string) {
