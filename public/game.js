@@ -325,6 +325,13 @@ socket.on('moveApproved', (data) => {
 
         gameHistory.push({ row: placedRow, col: placedCol, number: placedNum, player: mover });
         board[placedRow][placedCol] = placedNum;
+
+        const targetCellEl = document.querySelector(`.cell[data-row="${placedRow}"][data-col="${placedCol}"]`);
+        if (targetCellEl) {
+            targetCellEl.classList.remove('pop-animation');
+            void targetCellEl.offsetWidth; // 애니메이션 강제 리셋 (연속 착수 대응)
+            targetCellEl.classList.add('pop-animation');
+        }
         lastMove = { row: placedRow, col: placedCol };
         if (myPlayerNumber === 0 && !isSpectatorReviewMode) spectatorCurrentStep = gameHistory.length;
 
@@ -422,19 +429,38 @@ function updateUI() {
 // 💡 9. 타이머 및 게임 종료
 function startTimer() {
     clearInterval(timerInterval); timeLeft = TURN_LIMIT;
+    document.body.classList.remove('warning-glow'); // 경고등 초기화
+    
     const bar = document.getElementById('timerBar'); bar.style.width = '100%'; bar.style.backgroundColor = '#2ecc71';
     timerInterval = setInterval(() => {
         timeLeft--; const pct = (timeLeft / TURN_LIMIT) * 100; bar.style.width = pct + '%';
         if (pct < 30) bar.style.backgroundColor = '#e74c3c'; else if (pct < 60) bar.style.backgroundColor = '#f1c40f';
-        if (timeLeft <= 0) { clearInterval(timerInterval); if (currentPlayer === myPlayerNumber) surrender(); }
+        
+        // 💡 [폴리싱 1] 10초 이하로 남으면 화면 가장자리에 붉은색 경고등 켜기!
+        if (timeLeft <= 10 && timeLeft > 0) {
+            document.body.classList.add('warning-glow');
+        } else {
+            document.body.classList.remove('warning-glow');
+        }
+
+        if (timeLeft <= 0) { 
+            clearInterval(timerInterval); 
+            document.body.classList.remove('warning-glow');
+            if (currentPlayer === myPlayerNumber) surrender(); 
+        }
     }, 1000);
 }
-function surrender() { socket.emit('surrender', { roomCode: currentRoomCode }); }
+function surrender() { 
+    if (confirm("정말로 기권하시겠습니까? 기권 시 즉시 패배로 기록됩니다.")) {
+        socket.emit('surrender', { roomCode: currentRoomCode }); 
+    }
+}
 
 socket.on('gameOver', (data) => { endGame(data.winner, data.isSuffocated, data.isSurrendered); });
 socket.on('kickedOut', () => { alert("대기방에서 강제 퇴장되었습니다."); backToMainLobby(); });
 
 function endGame(gameWinner, isSuffocated, isSurrendered) {
+    document.body.classList.remove('warning-glow');
     if (isGameOver) return;
     isGameOver = true; clearInterval(timerInterval);
     try { sndBgm.pause(); sndBgm.currentTime = 0; playSound(sndGameOver); } catch(e) {}
@@ -530,3 +556,57 @@ function returnToLiveSpectate() {
     playSound(sndBell);
     updateUI(); 
 }
+
+window.addEventListener('keydown', (e) => {
+    // 게임 중이 아니거나 숫자 패드 모달이 안 열려있으면 무시
+    const numpadModal = document.getElementById('numpadModal');
+    if (!isGameStarted || isGameOver || isSpectatorReviewMode || numpadModal.style.display === 'none') return;
+
+    // 1~9번 키보드를 누르면 해당 숫자 즉시 선택
+    if (e.key >= '1' && e.key <= '9') {
+        selectNumber(parseInt(e.key));
+    }
+    // 0번, ESC, 백스페이스 키 누르면 취소 버튼(닫기) 시스템 작동!
+    else if (e.key === '0' || e.key === 'Escape' || e.key === 'Backspace') {
+        closeNumpadModal();
+    }
+});
+
+// 💡 [폴리싱 4] 상대방 통신 지연 감지 및 안내 (Heartbeat 시스템)
+let heartbeatSender;
+let lastHeartbeatReceived = Date.now();
+let latencyCheckTimer;
+
+socket.on('gameStart', () => {
+    // 3초마다 내 생존 신호를 서버로 전송
+    clearInterval(heartbeatSender);
+    clearInterval(latencyCheckTimer);
+    lastHeartbeatReceived = Date.now();
+    document.getElementById('latencyBanner').style.display = 'none';
+
+    heartbeatSender = setInterval(() => {
+        if (isGameStarted && !isGameOver && currentRoomCode) {
+            socket.emit('heartbeat', { roomCode: currentRoomCode });
+        }
+    }, 3000);
+
+    // 1초마다 상대방 신호가 5초 이상 안 들어왔는지 감사
+    latencyCheckTimer = setInterval(() => {
+        if (!isGameStarted || isGameOver || myPlayerNumber === 0) return;
+        const timeDiff = Date.now() - lastHeartbeatReceived;
+        const banner = document.getElementById('latencyBanner');
+        
+        if (timeDiff > 5000) { // 5초 이상 상대방 응답이 없다면 지연 배너 출력!
+            if (banner) banner.style.display = 'flex';
+        } else {
+            if (banner) banner.style.display = 'none';
+        }
+    }, 1000);
+});
+
+// 상대방이 보낸 하트비트를 받으면 생존 시간 갱신!
+socket.on('opponentHeartbeat', () => {
+    lastHeartbeatReceived = Date.now();
+    const banner = document.getElementById('latencyBanner');
+    if (banner) banner.style.display = 'none';
+});

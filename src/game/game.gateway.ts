@@ -488,4 +488,11 @@ export class GameGateway implements OnGatewayDisconnect {
       isSurrendered: false
     });
   }
+  
+  @SubscribeMessage('heartbeat')
+  handleHeartbeat(@ConnectedSocket() client: Socket, @MessageBody() data: { roomCode: string }) {
+    if (!data.roomCode) return;
+    // 나를 제외한 방 안에 있는 상대방에게만 '살아있음' 신호 전송!
+    client.to(data.roomCode).emit('opponentHeartbeat');
+  }
 }
