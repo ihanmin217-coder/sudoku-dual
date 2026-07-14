@@ -65,20 +65,14 @@ export class GameGateway implements OnGatewayDisconnect {
       const room = this.matchingRooms[roomCode];
       if (!room) continue;
 
-      // 🛡️ [핵심 신규 추가] 현재 게임이 진행 중인데 1P나 2P가 강제 종료(탈주)한 경우 즉시 게임 끝!
-      const gameRoom = (this.gameService as any).getRoom ? (this.gameService as any).getRoom(roomCode) : null;
-      if (gameRoom && !gameRoom.isGameOver) {
+      // 🛡️ 핵심 로직: 게임 중에 1P나 2P가 튕기거나 창을 닫았다면?
+      if (room.isGameStarted) {
         if (room.p1Id === client.id || room.p2Id === client.id) {
-          gameRoom.isGameOver = true;
-          const winnerNum = (room.p1Id === client.id) ? 2 : 1; // 나간 사람의 반대편이 승리
+          room.isGameStarted = false; // 중복 발송 방지
+          const winnerNum = (room.p1Id === client.id) ? 2 : 1; 
           console.log(`🚨 [강제 종료 감지] 방 ${roomCode}에서 플레이어 탈주! ${winnerNum}P 기권 승리 처리`);
           
-          // 방에 남아있는 상대방과 관전자들에게 즉시 승리 팝업 전송!
-          this.server.to(roomCode).emit('gameOver', {
-            winner: winnerNum,
-            isSuffocated: false,
-            isSurrendered: true // 탈주도 기권 패배로 취급하여 팝업 출력
-          });
+          this.server.to(roomCode).emit('gameOver', { winner: winnerNum, isSuffocated: false, isSurrendered: true });
         }
       }
 
@@ -231,28 +225,22 @@ export class GameGateway implements OnGatewayDisconnect {
   @SubscribeMessage('startGame')
   handleStartGame(@ConnectedSocket() client: Socket, @MessageBody() data: any) {
     const room = this.matchingRooms[data.roomCode];
-    
-    // 오직 방장만 쏠 수 있는 신호인지 1차 검증
     if (!room || room.creator.id !== client.id) return;
-    
-    // 1P, 2P 자리가 꽉 찼는지 2차 검증
     if (!room.p1Id || !room.p2Id) return;
 
-    // 모두 준비 완료 상태인지 최종 검증 (방장은 무조건 준비 완료로 취급)
     const p1IsReady = room.p1Ready || (room.p1Id === room.creator.id);
     const p2IsReady = room.p2Ready || (room.p2Id === room.creator.id);
     if (!p1IsReady || !p2IsReady) return;
 
-    // 참가자들에게 부여될 진짜 역할(1P, 2P) 패키징
-    const roles: Record<string, number> = {};
-    roles[room.p1Id] = 1; // 서버 엔진에서 1P
-    roles[room.p2Id] = 2; // 서버 엔진에서 2P
+    // 💡 [버그 1 셋업] 서버 방 객체에 게임 진행 중임을 확실하게 기록합니다!
+    room.isGameStarted = true; 
 
-    // 전원에게 게임 시작 팡파레 송출!
+    const roles: Record<string, number> = {};
+    roles[room.p1Id] = 1; 
+    roles[room.p2Id] = 2; 
+
     this.server.to(data.roomCode).emit('gameStart', {
-      roles: roles,
-      turnLimit: room.turnLimit || 60,
-      turnPref: room.turnPref || 'RANDOM'
+      roles: roles, turnLimit: room.turnLimit || 60, turnPref: room.turnPref || 'RANDOM'
     });
   }
 
@@ -429,6 +417,7 @@ export class GameGateway implements OnGatewayDisconnect {
   handleSurrender(@ConnectedSocket() client: Socket, @MessageBody() data: any) {
     const room = this.matchingRooms[data.roomCode];
     if (!room) return;
+    room.isGameStarted = false; // 💡 정상 기권했으므로 탈주 체크 무효화
     const gameRoom = (this.gameService as any).getRoom ? (this.gameService as any).getRoom(data.roomCode) : null;
     if (gameRoom) gameRoom.isGameOver = true;
 
@@ -483,6 +472,7 @@ export class GameGateway implements OnGatewayDisconnect {
   handleClaimVictory(@ConnectedSocket() client: Socket, @MessageBody() data: { roomCode: string; winner: number; reason: string }) {
     const room = this.matchingRooms[data.roomCode];
     if (!room) return;
+    room.isGameStarted = false; // 💡 정상 승리했으므로 탈주 체크 무효화
 
     const gameRoom = (this.gameService as any).getRoom ? (this.gameService as any).getRoom(data.roomCode) : null;
     if (gameRoom) gameRoom.isGameOver = true;

@@ -460,11 +460,19 @@ function jumpToReviewStep(step) {
     if (gameHistory.length === 0) return;
     isSpectatorReviewMode = true; spectatorCurrentStep = step;
     if (spectatorCurrentStep < 0) spectatorCurrentStep = 0; if (spectatorCurrentStep > gameHistory.length) spectatorCurrentStep = gameHistory.length;
+    
     const specInput = document.getElementById('specMoveDirectInput'); const playerInput = document.getElementById('playerMoveDirectInput');
     if(specInput) specInput.value = spectatorCurrentStep; if(playerInput) playerInput.value = spectatorCurrentStep;
+    
+    // 윗줄 턴 수는 언제나 정상 유지
     const specReplay = document.getElementById('specReplayStatus'); const playerReplay = document.getElementById('playerReplayStatus');
     if(specReplay) specReplay.innerText = `/ ${gameHistory.length} 턴`;
     if(playerReplay) playerReplay.innerText = `/ ${gameHistory.length} 턴`;
+    
+    // 아랫줄 상태창 텍스트 변경
+    const liveIndicator = document.getElementById('liveStatusIndicator');
+    if (liveIndicator) liveIndicator.innerText = "⏸ 과거 복기 중";
+
     playSound(sndPencil); renderVirtualBoardToStep(spectatorCurrentStep);
 }
 function stepSpectatorReplay(dir) { jumpToReviewStep(spectatorCurrentStep + dir); }
@@ -516,9 +524,9 @@ socket.on('receiveEmoticon', (data) => {
 const style = document.createElement('style'); style.innerHTML = `@keyframes floatUp { 0% { opacity: 1; bottom: 100px; } 100% { opacity: 0; bottom: 200px; } }`; document.head.appendChild(style);
 function returnToLiveSpectate() {
     isSpectatorReviewMode = false;
-    const specReplay = document.getElementById('specReplayStatus');
-    if (specReplay) specReplay.innerText = "🔴 라이브 관전 중";
+    const liveIndicator = document.getElementById('liveStatusIndicator');
+    if (liveIndicator) liveIndicator.innerText = "🔴 실시간 라이브 관전 중";
     
     playSound(sndBell);
-    updateUI(); // 현재 실시간 보드판 상태로 즉시 새로고침!
+    updateUI(); 
 }

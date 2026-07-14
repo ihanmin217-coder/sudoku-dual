@@ -124,7 +124,9 @@
 
         <div id="spectatorReviewControls" class="review-panel spec-theme" style="display: none;">
             <div class="review-title" style="color: #0d47a1; font-size: 22px; font-weight: bold; margin-bottom: 5px; text-align: center;">🔎 실시간 복기 모드 (관전자 전용)</div>
-            <div class="review-btn-group" style="display: flex; justify-content: center; gap: 8px; align-items: center; flex-wrap: wrap;">
+            
+            <!-- 첫 번째 줄: 복기 타임 점프 시스템 고정 -->
+            <div class="review-btn-group" style="display: flex; justify-content: center; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px;">
                 <button class="btn-small" style="background: #78909c;" onclick="jumpToReviewStep(0)">⏮ 처음</button>
                 <button class="btn-small" style="background: #1976d2;" onclick="stepSpectatorReplay(-1)">◀ 이전</button>
                 
@@ -135,7 +137,12 @@
 
                 <button class="btn-small" style="background: #1976d2;" onclick="stepSpectatorReplay(1)">다음 ▶</button>
                 <button class="btn-small" style="background: #78909c;" onclick="jumpToReviewStep(gameHistory.length)">⏭ 끝</button>
-                <button class="btn-small" style="background: #2e7d32;" id="specLiveBtn" onclick="returnToLiveSpectate()">🔴 라이브 보기</button>
+            </div>
+
+            <!-- 두 번째 줄: 라이브 상태 표시기 및 전환 버튼 -->
+            <div style="display: flex; justify-content: center; align-items: center; gap: 15px; border-top: 1px dashed #90caf9; padding-top: 8px;">
+                <span id="liveStatusIndicator" style="font-size: 20px; font-weight: bold; color: #d32f2f;">🔴 라이브 관전 중</span>
+                <button class="btn-small" style="background: #2e7d32;" id="specLiveBtn" onclick="returnToLiveSpectate()">▶️ 라이브 화면으로</button>
                 <button class="btn-small" style="background: #e74c3c; display: none;" id="specResultBtn" onclick="showGameOverScreenAgain()">🏆 결과창 보기</button>
             </div>
         </div>
