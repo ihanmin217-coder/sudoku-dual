@@ -3,10 +3,10 @@ import { createClient } from '@supabase/supabase-js';
 
 @Injectable()
 export class GameService {
-  // 💡 [핵심 해결] 타입을 ': any'로 지정하여, TypeScript가 DB 문법이나 테이블 구조로 에러(이슈)를 띄우지 못하게 원천 차단합니다!
+  // 💡 아까 찾으신 Project URL과 API Key (anon public)를 아래에 정확히 입력해 주세요!
   private supabase: any = createClient(
-    'https://zbucvqsonuefsbmkfvrc.supabase.co/rest/v1/', 
-    'sb_publishable_k_K27JqDyZs6x3NqcznNiw_CqJQhoU0'
+    'https://zbucvqsonuefsbmkfvrc.supabase.co',      // <--여기에 https://...로 시작하는 Project URL을 붙여넣으세요.
+    'sb_publishable_k_K27JqDyZs6x3NqcznNiw_CqJQhoU0'  // <--여기에 eyJ...로 시작하는 API Key (anon public)를 붙여넣으세요.
   );
 
   private rooms: Record<string, any> = {};
@@ -15,6 +15,7 @@ export class GameService {
     return this.rooms[roomCode];
   }
 
+  // 💡 게임 종료 시 승자와 패자의 전적을 Supabase DB에 기록 및 자동 생성(Insert/Update)하는 오리지널 함수
   async recordBattleResult(winnerNick: string, loserNick: string) {
     if (!winnerNick || !loserNick || winnerNick === '익명' || loserNick === '익명') {
       console.log('⚠️ 익명 유저는 전적이 기록되지 않습니다.');
@@ -24,7 +25,7 @@ export class GameService {
     try {
       const db = this.supabase.from('users');
 
-      // 1. 승리자 기록 및 숨겨진 에러 감지
+      // 1. 승리자 기록 (id는 DB 기본값인 gen_random_uuid()가 자동으로 생성해 주므로 빼고 보냅니다)
       const { data: winUser } = await db.select('*').eq('nickname', winnerNick).single();
       if (winUser) {
         const { error } = await db.update({ wins: winUser.wins + 1, points: winUser.points + 20 }).eq('nickname', winnerNick);
@@ -34,7 +35,7 @@ export class GameService {
         if (error) console.error('❌ 승리자 신규 등록 실패:', error.message);
       }
 
-      // 2. 패배자 기록 및 숨겨진 에러 감지
+      // 2. 패배자 기록
       const { data: loseUser } = await db.select('*').eq('nickname', loserNick).single();
       if (loseUser) {
         const { error } = await db.update({ losses: loseUser.losses + 1, points: Math.max(0, loseUser.points - 10) }).eq('nickname', loserNick);
