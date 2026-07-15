@@ -165,7 +165,7 @@ export class GameService {
       if (winUser) {
         await this.supabase.from('users').update({ wins: winUser.wins + 1, points: winUser.points + 20 }).eq('nickname', winnerNick);
       } else {
-        await this.supabase.from('users').insert([{ id: crypto.randomUUID(), nickname: winnerNick, wins: 1, losses: 0, points: 1020 }]);
+        await this.supabase.from('users').insert([{ nickname: winnerNick, wins: 1, losses: 0, points: 1020 }]);
       }
 
       // 2. 패배자 기록 (없으면 새로 만들고 losses + 1, 점수 - 10)
@@ -173,7 +173,7 @@ export class GameService {
       if (loseUser) {
         await this.supabase.from('users').update({ losses: loseUser.losses + 1, points: Math.max(0, loseUser.points - 10) }).eq('nickname', loserNick);
       } else {
-        await this.supabase.from('users').insert([{ id: crypto.randomUUID(), nickname: loserNick, wins: 0, losses: 1, points: 990 }]);
+        await this.supabase.from('users').insert([{ nickname: loserNick, wins: 0, losses: 1, points: 990 }]);
       }
 
       console.log(`📊 [DB 전적 기록 완료] 승리: ${winnerNick} (+20점) / 패배: ${loserNick} (-10점)`);
