@@ -6,7 +6,7 @@ export class GameService {
   // 💡 아까 찾으신 Project URL과 API Key (anon public)를 아래에 정확히 입력해 주세요!
   private supabase: any = createClient(
     'https://zbucvqsonuefsbmkfvrc.supabase.co',      // <--여기에 https://...로 시작하는 Project URL을 붙여넣으세요.
-    'sb_publishable_k_K27JqDyZs6x3NqcznNiw_CqJQhoU0'  // <--여기에 eyJ...로 시작하는 API Key (anon public)를 붙여넣으세요.
+    'K27JqDyZs6x3NqcznNiw_CqJQhoU0'  // <--여기에 eyJ...로 시작하는 API Key (anon public)를 붙여넣으세요.
   );
 
   private rooms: Record<string, any> = {};
