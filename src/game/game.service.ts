@@ -50,4 +50,23 @@ export class GameService {
       console.error('❌ DB 통신 중 치명적 오류 발생:', error);
     }
   }
+
+  // 닉네임만으로 Supabase에서 전적과 점수를 실시간으로 찾아오는 함수
+  async getUserStats(nickname: string) {
+    if (!nickname || nickname === '익명' || nickname === '[비어있음]') {
+      return { wins: 0, losses: 0, points: 1000 };
+    }
+    try {
+      const db = this.supabase.from('users');
+      const { data, error } = await db.select('wins, losses, points').eq('nickname', nickname).single();
+      
+      if (error || !data) {
+        // 아직 DB에 없는 신규 유저라면 기본값 리턴
+        return { wins: 0, losses: 0, points: 1000 };
+      }
+      return data;
+    } catch (e) {
+      return { wins: 0, losses: 0, points: 1000 };
+    }
+  }
 }

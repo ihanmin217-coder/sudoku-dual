@@ -19,6 +19,31 @@ export class GameGateway implements OnGatewayDisconnect {
 
   private matchingRooms: Record<string, any> = {};
 
+  // 1P, 2P가 바뀔 때마다 실시간 DB 전적을 긁어와 디스플레이 이름을 조립합니다.
+  private async updateRoomStatsAndNames(room: any) {
+    if (!room) return;
+
+    // 1P 조립기
+    if (room.p1Name && room.p1Name !== '익명') {
+      const stats = await this.gameService.getUserStats(room.p1Name);
+      const total = stats.wins + stats.losses;
+      const winRate = total > 0 ? Math.round((stats.wins / total) * 100) : 0;
+      room.p1DisplayName = `🔴 ${room.p1Name} (${winRate}% / ${stats.points}점)`;
+    } else {
+      room.p1DisplayName = room.p1Name || '[비어있음]';
+    }
+
+    // 2P 조립기
+    if (room.p2Name && room.p2Name !== '익명') {
+      const stats = await this.gameService.getUserStats(room.p2Name);
+      const total = stats.wins + stats.losses;
+      const winRate = total > 0 ? Math.round((stats.wins / total) * 100) : 0;
+      room.p2DisplayName = `🔵 ${room.p2Name} (${winRate}% / ${stats.points}점)`;
+    } else {
+      room.p2DisplayName = room.p2Name || '[비어있음]';
+    }
+  }
+
   // 💡 [에러 2 완벽 해결] 방을 만들 때 서버가 뻗어버리지 않도록 '무적 방어막(gameServiceAny)'을 다시 씌웁니다!
   private broadcastRoomList() {
     const roomList: any[] = []; 
@@ -58,7 +83,7 @@ export class GameGateway implements OnGatewayDisconnect {
   }
 
   // 💡 [서버 교체] 창을 완전히 꺼버리는 탈주 발생 시 즉각 결과창 패배 처리를 강제하는 로직
-  handleDisconnect(client: Socket) {
+  async handleDisconnect(client: Socket) {
     console.log(`🔌 유저 접속 종료(유령 청소 시작): ${client.id}`);
 
     for (const roomCode in this.matchingRooms) {
@@ -97,6 +122,7 @@ export class GameGateway implements OnGatewayDisconnect {
           if (room.p1Id === client.id) { room.p1Id = null; room.p1Name = null; room.p1Ready = false; }
           if (room.p2Id === client.id) { room.p2Id = null; room.p2Name = null; room.p2Ready = false; }
           
+          await this.updateRoomStatsAndNames(room);
           this.server.to(roomCode).emit('roomStateUpdated', { room, isGameRoomOver: true });
         } else {
           // 남은 사람 없으면 방 폭파
@@ -117,6 +143,7 @@ export class GameGateway implements OnGatewayDisconnect {
         if (room.p1Id === client.id) { room.p1Id = null; room.p1Name = null; room.p1Ready = false; }
         if (room.p2Id === client.id) { room.p2Id = null; room.p2Name = null; room.p2Ready = false; }
 
+        await this.updateRoomStatsAndNames(room);
         this.server.to(roomCode).emit('roomStateUpdated', { room, isGameRoomOver: true });
         if (typeof (this as any).broadcastRoomList === 'function') (this as any).broadcastRoomList();
         break;
@@ -126,7 +153,7 @@ export class GameGateway implements OnGatewayDisconnect {
   
   // 💡 공개/비밀 선택을 받아 방을 개설하는 백엔드 로직
   @SubscribeMessage('createRoom')
-  handleCreateRoom(@ConnectedSocket() client: Socket, @MessageBody() data: any) {
+  async handleCreateRoom(@ConnectedSocket() client: Socket, @MessageBody() data: any) {
     const roomCode = Math.floor(1000 + Math.random() * 9000).toString();
     
     this.matchingRooms[roomCode] = {
@@ -142,12 +169,13 @@ export class GameGateway implements OnGatewayDisconnect {
     client.emit('roomJoined', { roomCode, isHost: true, myId: client.id });
     if (typeof (this as any).broadcastRoomList === 'function') (this as any).broadcastRoomList();
 
+    await this.updateRoomStatsAndNames(this.matchingRooms[roomCode]);
     this.server.to(roomCode).emit('roomStateUpdated', { room: this.matchingRooms[roomCode] });
   }
 
   // 💡 [신규] 방 코드를 직접 치고 들어오거나, 고유 링크(URL)를 타고 들어오는 유저 처리
   @SubscribeMessage('joinRoom')
-  handleJoinRoom(@ConnectedSocket() client: Socket, @MessageBody() data: any) {
+  async handleJoinRoom(@ConnectedSocket() client: Socket, @MessageBody() data: any) {
     const roomCode = data.roomCode;
     const room = this.matchingRooms[roomCode];
 
@@ -167,6 +195,7 @@ export class GameGateway implements OnGatewayDisconnect {
     client.emit('roomJoined', { roomCode, isHost: false, myId: client.id });
     
     // 방 전체에 새로운 유저가 들어왔음을 알림
+    await this.updateRoomStatsAndNames(room);
     this.server.to(roomCode).emit('roomStateUpdated', { 
       room, 
       isGameRoomOver: gameRoom ? gameRoom.isGameOver : true 
@@ -176,7 +205,7 @@ export class GameGateway implements OnGatewayDisconnect {
   }
 
   @SubscribeMessage('toggleReady')
-  handleToggleReady(@ConnectedSocket() client: Socket, @MessageBody() data: any) {
+  async handleToggleReady(@ConnectedSocket() client: Socket, @MessageBody() data: any) {
     const room = this.matchingRooms[data.roomCode];
     if (!room) return;
     
@@ -184,6 +213,7 @@ export class GameGateway implements OnGatewayDisconnect {
     if (room.p1Id === client.id) room.p1Ready = data.isReady;
     if (room.p2Id === client.id) room.p2Ready = data.isReady;
     
+    await this.updateRoomStatsAndNames(room);
     this.server.to(data.roomCode).emit('roomStateUpdated', { room, isGameRoomOver: true });
   }
 
@@ -381,7 +411,7 @@ export class GameGateway implements OnGatewayDisconnect {
 
   // 💡 [버그 3 해결] 방장이 특정 유저(또는 본인)를 1P나 2P 자리에 앉히는 권한 통제 로직
   @SubscribeMessage('assignSlotTarget')
-  handleAssignSlotTarget(@ConnectedSocket() client: Socket, @MessageBody() data: any) {
+  async handleAssignSlotTarget(@ConnectedSocket() client: Socket, @MessageBody() data: any) {
     const room = this.matchingRooms[data.roomCode];
     if (!room || room.creator.id !== client.id) return;
 
@@ -413,6 +443,7 @@ export class GameGateway implements OnGatewayDisconnect {
     if (room.p1Id && room.p1Id !== room.creator.id) room.selectedGuestId = room.p1Id;
     if (room.p2Id && room.p2Id !== room.creator.id) room.selectedGuestId = room.p2Id;
 
+    await this.updateRoomStatsAndNames(room);
     this.server.to(data.roomCode).emit('roomStateUpdated', { room, isGameRoomOver: true });
   }
 
@@ -455,7 +486,7 @@ export class GameGateway implements OnGatewayDisconnect {
 
   // 💡 [요청 3 추가] 불량 유저 강제 추방 로직
   @SubscribeMessage('kickUser')
-  handleKickUser(@ConnectedSocket() client: Socket, @MessageBody() data: any) {
+  async handleKickUser(@ConnectedSocket() client: Socket, @MessageBody() data: any) {
     const room = this.matchingRooms[data.roomCode];
     if (!room || room.creator.id !== client.id) return; // 방장만 가능
 
@@ -468,6 +499,7 @@ export class GameGateway implements OnGatewayDisconnect {
         // 대상자에게 강퇴 팝업 명령 전송 및 소켓 그룹에서 강제 이탈
         this.server.to(data.targetId).emit('kickedOut');
         this.server.sockets.sockets.get(data.targetId)?.leave(data.roomCode);
+        await this.updateRoomStatsAndNames(room);
         this.server.to(data.roomCode).emit('roomStateUpdated', { room, isGameRoomOver: true });
     }
   }
