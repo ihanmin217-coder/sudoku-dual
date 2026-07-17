@@ -124,6 +124,14 @@ function backToMainLobby() { forceHostMigrationBeforeLeave(); document.getElemen
 // 💡 4. 대기실 업데이트
 socket.on('roomStateUpdated', (data) => {
     const room = data.room; if (!room) return;
+
+    // 💡 [기존 닉네임 대신 실시간 DB 전적이 조합된 DisplayName으로 교체!]
+    const p1Slot = document.getElementById('p1SlotName');
+    const p2Slot = document.getElementById('p2SlotName');
+    
+    if (p1Slot) p1Slot.innerText = room.p1DisplayName || '[비어있음]';
+    if (p2Slot) p2Slot.innerText = room.p2DisplayName || '[비어있음]';
+    
     document.getElementById('roomCodeDisplay').innerText = currentRoomCode;
     
     isHost = (myId === room.creator.id);
