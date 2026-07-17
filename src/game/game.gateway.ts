@@ -273,15 +273,33 @@ export class GameGateway implements OnGatewayDisconnect {
     const p2IsReady = room.p2Ready || (room.p2Id === room.creator.id);
     if (!p1IsReady || !p2IsReady) return;
 
-    // 💡 [버그 1 셋업] 서버 방 객체에 게임 진행 중임을 확실하게 기록합니다!
-    room.isGameStarted = true; 
+    room.isGameStarted = true;
 
     const roles: Record<string, number> = {};
-    roles[room.p1Id] = 1; 
-    roles[room.p2Id] = 2; 
+    if (room.turnPref === 'P1_FIRST') {
+      roles[room.p1Id] = 1; roles[room.p2Id] = 2;
+    } else if (room.turnPref === 'P2_FIRST') {
+      roles[room.p2Id] = 1; roles[room.p1Id] = 2;
+    } else {
+      if (Math.random() < 0.5) {
+        roles[room.p1Id] = 1; roles[room.p2Id] = 2;
+      } else {
+        roles[room.p2Id] = 1; roles[room.p1Id] = 2;
+      }
+    }
+
+    // 💡 [선공/후공 이름 맵 세팅] 실제 역할(1: 선공, 2: 후공)에 알맞은 닉네임을 구해서 클라이언트에 보냅니다.
+    const roleNames: Record<number, string> = {};
+    for (const socketId in roles) {
+      if (socketId === room.p1Id) roleNames[roles[socketId]] = room.p1Name;
+      if (socketId === room.p2Id) roleNames[roles[socketId]] = room.p2Name;
+    }
 
     this.server.to(data.roomCode).emit('gameStart', {
-      roles: roles, turnLimit: room.turnLimit || 60, turnPref: room.turnPref || 'RANDOM'
+      roles: roles,
+      names: roleNames, // <-- 이 한 줄 추가!
+      turnLimit: room.turnLimit || 60,
+      turnPref: room.turnPref || 'RANDOM'
     });
   }
 

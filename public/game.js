@@ -125,13 +125,12 @@ function backToMainLobby() { forceHostMigrationBeforeLeave(); document.getElemen
 socket.on('roomStateUpdated', (data) => {
     const room = data.room; if (!room) return;
 
-    // 💡 [기존 닉네임 대신 실시간 DB 전적이 조합된 DisplayName으로 교체!]
+    // 💡 [수정] 대기실 UI 이름표를 실시간 DB 연동 이름표(DisplayName)로 갱신!
     const p1Slot = document.getElementById('p1SlotName');
     const p2Slot = document.getElementById('p2SlotName');
-    
-    if (p1Slot) p1Slot.innerText = room.p1DisplayName || '[비어있음]';
-    if (p2Slot) p2Slot.innerText = room.p2DisplayName || '[비어있음]';
-    
+    if (p1Slot) p1Slot.innerText = room.p1DisplayName || room.p1Name || '[비어있음]';
+    if (p2Slot) p2Slot.innerText = room.p2DisplayName || room.p2Name || '[비어있음]';
+
     document.getElementById('roomCodeDisplay').innerText = currentRoomCode;
     
     isHost = (myId === room.creator.id);
@@ -197,7 +196,8 @@ socket.on('roomStateUpdated', (data) => {
     document.getElementById('p1SlotName').innerText = room.p1Name ? `${room.p1Name}${p1ReadyText}` : `[비어있음]`;
     document.getElementById('p2SlotName').innerText = room.p2Name ? `${room.p2Name}${p2ReadyText}` : `[비어있음]`;
     
-    playerNames[1] = room.p1Name || '선공 대기자'; playerNames[2] = room.p2Name || '후공 대기자';
+    playerNames[1] = room.p1Name || '';
+    playerNames[2] = room.p2Name || '';
     const hostCrown = (room.creator.id === room.p1Id) ? ' 👑' : ''; const guestCrown = (room.creator.id === room.p2Id) ? ' 👑' : '';
     document.getElementById('p1Info').innerText = `선공: ${playerNames[1]} [0점]${hostCrown}`;
     document.getElementById('p2Info').innerText = `후공: ${playerNames[2]} [0점]${guestCrown}`;
@@ -212,6 +212,7 @@ function saveConfigFromModal() { serverConfigTurnLimit = parseInt(document.getEl
 
 // 💡 5. 게임 시작 및 보드 초기화
 socket.on('gameStart', (data) => {
+    console.log("🎮 게임 시작!", data);
     isGameStarted = true; isGameOver = false; gameHistory = []; lastMove = null;
     scores = { 1: 0, 2: 0 }; boxOwners = Array(10).fill(0); rowOwners = Array(9).fill(0); colOwners = Array(9).fill(0);
     
@@ -226,6 +227,11 @@ socket.on('gameStart', (data) => {
     document.getElementById('spectatorReviewControls').style.display = (myPlayerNumber === 0) ? 'block' : 'none';
     document.getElementById('playerReviewControls').style.display = 'none';
     isSpectatorReviewMode = false;
+
+    if (data.names) {
+        playerNames[1] = data.names[1] || '1P';
+        playerNames[2] = data.names[2] || '2P';
+    }
 
     if (bgmVol > 0) {
         sndBgm.volume = bgmVol; sndBgm.currentTime = 0;
