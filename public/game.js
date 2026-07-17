@@ -59,14 +59,22 @@ function playSound(snd) {
 }
 
 // 💡 3. 로비 기능
+// 💡 [수정] 페이지 로드 시 기존 저장된 닉네임을 불러오고, 타자를 칠 때마다 실시간으로 자동 저장합니다!
 window.onload = () => {
-    socket.emit('requestRoomList');
-    const urlParams = new URLSearchParams(window.location.search);
-    const roomFromUrl = urlParams.get('room');
-    if (roomFromUrl) {
-        document.getElementById('joinCodeInput').value = roomFromUrl;
-        document.getElementById('nicknameInput').focus();
+    const savedNick = localStorage.getItem('sudoku_nickname');
+    const nickInput = document.getElementById('nicknameInput');
+    
+    if (nickInput) {
+        if (savedNick) {
+            nickInput.value = savedNick;
+        }
+        
+        // 글자를 입력할 때마다 실시간으로 브라우저에 자동 저장!
+        nickInput.addEventListener('input', (e) => {
+            localStorage.setItem('sudoku_nickname', e.target.value.trim());
+        });
     }
+    socket.emit('requestRoomList');
 };
 function createNewRoom(isPrivate) {
     const nick = document.getElementById('nicknameInput').value.trim() || '익명';
@@ -288,14 +296,34 @@ function openNumpadModal(isOpening, r=-1, c=-1) {
     document.getElementById('numpadModal').style.display = 'flex';
 }
 function closeNumpadModal() { document.getElementById('numpadModal').style.display = 'none'; }
+// 💡 [버그 2 완치] 취소(0) 입력 시 서버 착수 보고 및 턴 전환을 완전히 차단하는 필터 적용!
 function selectNumber(num) {
-    closeNumpadModal();
-    if (isOpeningSelection) {
-        socket.emit('playerMove', { roomCode: currentRoomCode, move: { number: num, isOpening: true } });
-    } else {
-        if (!isValidSudokuMove(selectedRow, selectedCol, num)) return alert("스도쿠 규칙 위반입니다! (가로, 세로, 3x3 박스 내 중복)");
-        socket.emit('playerMove', { roomCode: currentRoomCode, move: { row: selectedRow, col: selectedCol, number: num, isOpening: false } });
+    if (selectedRow === null || selectedCol === null) return;
+
+    // ⭐ [핵심 추가] 만약 0(취소)을 선택한 경우, 서버에 보고하지 않고 조용히 모달창만 닫고 리턴합니다!
+    if (num === 0) {
+        closeNumpadModal();
+        return;
     }
+
+    // 숫자를 기입하는 정식 착수인 경우에만 스도쿠 제약 규칙 검사를 실시합니다.
+    if (!isValidMove(selectedRow, selectedCol, num)) {
+        alert("스도쿠 규칙 위반! (가로, 세로, 3x3 박스 내 중복 숫자)");
+        return;
+    }
+
+    // 진짜 숫자를 두었을 때만 서버에 착수 보고를 올려 턴을 전환합니다.
+    socket.emit('playerMove', {
+        roomCode: currentRoomCode,
+        move: {
+            row: selectedRow,
+            col: selectedCol,
+            num: num,
+            player: myPlayerNumber
+        }
+    });
+
+    closeNumpadModal();
 }
 
 // 💡 7. 검사 도구 및 승리 로직
