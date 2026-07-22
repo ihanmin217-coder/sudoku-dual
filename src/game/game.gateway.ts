@@ -417,12 +417,14 @@ export class GameGateway implements OnGatewayDisconnect {
 
   // 💡 [버그 4 해결] 방장이 모달창에서 설정한 시간/선후공 규칙을 방에 적용하는 로직
   @SubscribeMessage('updateRoomSettings')
-  handleUpdateRoomSettings(@ConnectedSocket() client: Socket, @MessageBody() data: any) {
+  async handleUpdateRoomSettings(@ConnectedSocket() client: Socket, @MessageBody() data: any) {
     const room = this.matchingRooms[data.roomCode];
     if (room && room.creator.id === client.id) {
       room.turnLimit = data.turnLimit;
       room.turnPref = data.turnPref;
       
+      // 💡 [수정] 설정 변경 시에도 전적 이름표 조립 로직을 반드시 실행합니다!
+      await this.updateRoomStatsAndNames(room);
       this.server.to(data.roomCode).emit('roomStateUpdated', { room, isGameRoomOver: true });
     }
   }
@@ -524,7 +526,7 @@ export class GameGateway implements OnGatewayDisconnect {
 
   // 💡 [요청 3 추가] 특정 유저에게 방장 위임 후 자신은 게스트로 강등
   @SubscribeMessage('delegateHost')
-  handleDelegateHost(@ConnectedSocket() client: Socket, @MessageBody() data: any) {
+  async handleDelegateHost(@ConnectedSocket() client: Socket, @MessageBody() data: any) {
     const room = this.matchingRooms[data.roomCode];
     if (!room || room.creator.id !== client.id) return;
 
@@ -532,9 +534,11 @@ export class GameGateway implements OnGatewayDisconnect {
     if (guestIndex !== -1) {
         const newHost = room.guests[guestIndex];
         room.guests.splice(guestIndex, 1);
-        room.guests.push({ id: room.creator.id, nickname: room.creator.nickname }); // 기존 방장을 게스트로 이동
-        room.creator = { id: newHost.id, nickname: newHost.nickname }; // 새 방장 등극
+        room.guests.push({ id: room.creator.id, nickname: room.creator.nickname });
+        room.creator = { id: newHost.id, nickname: newHost.nickname };
 
+        // 💡 [수정] 방장이 바뀌었을 때도 전적 이름표 조립 로직을 호출합니다!
+        await this.updateRoomStatsAndNames(room);
         this.server.to(data.roomCode).emit('roomStateUpdated', { room, isGameRoomOver: true });
     }
   }

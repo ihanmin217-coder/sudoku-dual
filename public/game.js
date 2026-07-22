@@ -201,6 +201,11 @@ socket.on('roomStateUpdated', (data) => {
 
     const p1ReadyText = p1IsReady && room.p1Id ? " [✅완료]" : "";
     const p2ReadyText = p2IsReady && room.p2Id ? " [✅완료]" : "";
+
+    // 💡 [수정] 그냥 p1Name이 아니라, 서버에서 승률/점수를 조립해준 p1DisplayName을 활용합니다!
+    const p1DisplayStr = room.p1DisplayName || room.p1Name || "[비어있음]";
+    const p2DisplayStr = room.p2DisplayName || room.p2Name || "[비어있음]";
+
     document.getElementById('p1SlotName').innerText = room.p1Name ? `${room.p1Name}${p1ReadyText}` : `[비어있음]`;
     document.getElementById('p2SlotName').innerText = room.p2Name ? `${room.p2Name}${p2ReadyText}` : `[비어있음]`;
     
@@ -292,16 +297,35 @@ function getBoxFromRowCol(r, c) { return Math.floor(r / 3) * 3 + Math.floor(c / 
 let selectedRow = -1; let selectedCol = -1; let isOpeningSelection = false;
 function openNumpadModal(isOpening, r=-1, c=-1) {
     isOpeningSelection = isOpening; selectedRow = r; selectedCol = c;
-    document.getElementById('numpadTitle').innerText = isOpening ? "선공이 쓸 첫 숫자 선택" : "기입할 숫자 선택";
+    document.getElementById('numpadTitle').innerText = isOpening ? "선공이 쓸 첫 숫자 선택 (취소 불가)" : "기입할 숫자 선택";
+    
+    // 💡 [직관성 개선] 첫 숫자를 고를 때는 하단의 '❌ 닫기' 버튼 자체를 안 보이게 숨깁니다.
+    const closeBtn = document.querySelector('#numpadModal .btn-main');
+    if (closeBtn) {
+        closeBtn.style.display = isOpening ? 'none' : 'inline-block';
+    }
+
     document.getElementById('numpadModal').style.display = 'flex';
 }
-function closeNumpadModal() { document.getElementById('numpadModal').style.display = 'none'; }
+function closeNumpadModal() { 
+    // 💡 [완벽 방어] 오프닝 단계(첫 숫자 선택 중)일 때는 취소(닫기) 버튼이 절대 작동하지 않도록 막습니다!
+    if (isOpeningSelection) {
+        alert("게임 시작을 위해 첫 숫자를 반드시 선택해야 합니다!");
+        return;
+    }
+    document.getElementById('numpadModal').style.display = 'none'; 
+}
 // 💡 [버그 2 완치] 취소(0) 입력 시 서버 착수 보고 및 턴 전환을 완전히 차단하는 필터 적용!
 function selectNumber(num) {
     if (selectedRow === null || selectedCol === null) return;
 
-    // ⭐ [핵심 추가] 만약 0(취소)을 선택한 경우, 서버에 보고하지 않고 조용히 모달창만 닫고 리턴합니다!
+    // 만약 0(취소)을 선택한 경우
     if (num === 0) {
+        // 💡 [완벽 방어] 오프닝 단계라면 0번(취소) 입력도 무시합니다!
+        if (isOpeningSelection) {
+            alert("첫 숫자를 반드시 선택해주세요!");
+            return;
+        }
         closeNumpadModal();
         return;
     }
@@ -606,16 +630,18 @@ function returnToLiveSpectate() {
 }
 
 window.addEventListener('keydown', (e) => {
-    // 게임 중이 아니거나 숫자 패드 모달이 안 열려있으면 무시
     const numpadModal = document.getElementById('numpadModal');
     if (!isGameStarted || isGameOver || isSpectatorReviewMode || numpadModal.style.display === 'none') return;
 
-    // 1~9번 키보드를 누르면 해당 숫자 즉시 선택
     if (e.key >= '1' && e.key <= '9') {
         selectNumber(parseInt(e.key));
     }
-    // 0번, ESC, 백스페이스 키 누르면 취소 버튼(닫기) 시스템 작동!
     else if (e.key === '0' || e.key === 'Escape' || e.key === 'Backspace') {
+        // 💡 [완벽 방어] 오프닝 시에는 키보드 ESC나 백스페이스로 창을 끄는 것도 차단합니다!
+        if (isOpeningSelection) {
+            alert("게임 시작을 위해 첫 숫자를 반드시 선택해야 합니다!");
+            return;
+        }
         closeNumpadModal();
     }
 });
